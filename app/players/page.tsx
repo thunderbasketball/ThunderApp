@@ -46,8 +46,8 @@ async function Players() {
                 {g.players.map((p) => (
                   <li key={p.registrantId} className="px-4 py-3">
                     <div className="flex items-start justify-between gap-3">
-                      <p className="font-medium">
-                        {p.firstName} {p.lastName}
+                      <p>
+                        {p.firstName} <span className="font-bold">{p.lastName}</span>
                       </p>
                       {p.coachingInterest && (
                         <span className="shrink-0 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800 dark:bg-green-950 dark:text-green-200">
