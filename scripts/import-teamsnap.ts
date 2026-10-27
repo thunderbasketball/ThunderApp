@@ -45,7 +45,7 @@ if (dryRun) {
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
-  options: "-c search_path=app",
+  options: "-c search_path=public",
 });
 try {
   const d = await pool.query<{ name: string }>(

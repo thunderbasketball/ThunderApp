@@ -3,16 +3,16 @@ import { Pool } from "pg";
 
 // One shared connection pool per server process.
 // Reused across hot reloads in development so we don't leak connections.
-const globalForDb = globalThis as unknown as { appPool?: Pool };
+const globalForDb = globalThis as unknown as { thunderPool?: Pool };
 
 export const db =
-  globalForDb.appPool ??
+  globalForDb.thunderPool ??
   new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: { rejectUnauthorized: false },
-    // App tables live in the private "app" schema, which Supabase's public API doesn't expose.
-    options: "-c search_path=app",
+    // Tables are in public, locked with row level security (see db/migrations/003_lock_tables.sql).
+    options: "-c search_path=public",
     max: 5,
   });
 
-if (process.env.NODE_ENV !== "production") globalForDb.appPool = db;
+if (process.env.NODE_ENV !== "production") globalForDb.thunderPool = db;

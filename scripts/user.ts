@@ -9,7 +9,7 @@ const [cmd, ...args] = process.argv.slice(2);
 const client = new pg.Client({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
-  options: "-c search_path=app",
+  options: "-c search_path=public",
 });
 
 function cellArg(v: string | undefined): string {

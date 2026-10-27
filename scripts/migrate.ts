@@ -41,7 +41,7 @@ if (import.meta.main) {
   });
   await client.connect();
   try {
-    const applied = await migrate(client, process.env.DB_SCHEMA ?? "app");
+    const applied = await migrate(client, process.env.DB_SCHEMA ?? "public");
     console.log(applied.length ? `Applied: ${applied.join(", ")}` : "Already up to date.");
   } finally {
     await client.end();
