@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "db:migrate": "node --env-file=.env.local scripts/migrate.ts",
-    "user": "node --env-file=.env.local scripts/user.ts"
+    "user": "node --env-file=.env.local scripts/user.ts",
+    "import:teamsnap": "tsx --env-file=.env.local scripts/import-teamsnap.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0",
@@ -29,6 +30,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.4.3",
     "tailwindcss": "^4",
+    "tsx": "^4.23.15",
     "typescript": "^5",
     "vitest": "^3.2.7"
   },

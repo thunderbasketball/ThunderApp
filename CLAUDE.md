@@ -14,6 +14,8 @@ Secrets live only in `.env.local` (never committed, never pasted into chat). Two
 - `npx tsc --noEmit` and `npm run lint` — type check and lint
 - `npm run db:migrate` — apply new `db/migrations/*.sql` files
 - `npm run user -- list | add <cell> <first> <last> [email] | director <cell> | delete <cell>` — test accounts until the Users tab exists
+- `npm run import:teamsnap -- "data/import/<file>.csv" [--dry-run]` — replace registrations from a TeamSnap export (all columns kept; birthdates shifted +1 day when TeamSnap shows an evening time)
+- `data/` holds real exports with personal info: gitignored, never commit or paste it
 - Database access is server-only via `lib/db.ts` (pg pool on `DATABASE_URL`, Supabase Session pooler).
   Tables live in the private `app` schema (not exposed by Supabase's API). Tests run in a throwaway `app_test_*` schema.
 - Business rules live in plain functions (e.g. `lib/auth/service.ts`) that take `deps` (pool, email, clock) so tests can drive them; server actions in `app/**/actions.ts` are thin wrappers.
