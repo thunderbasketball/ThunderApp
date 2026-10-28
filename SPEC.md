@@ -200,3 +200,18 @@ One-time import from the current Sheets into Supabase: users, teams + staff, gym
 - Mobile-first. Coaches use this on their phones. Keep pages fast and light.
 - Every list or table is sorted.
 - "Who did it" is recorded: Booked By, Rostered By, and timestamps.
+
+## 11. Announcements & messages
+
+Built in steps: (1) announcements, (2) chats, (3) phone notifications (needs hosting on https).
+
+### Announcements (built)
+- The Director sends a one-way post (title up to 120 characters, message up to 4,000) to **Everyone**, **roles** (Directors, Coaches, Head Coaches, Assistant Coaches, Team Managers, Team Parents), **teams** (all their staff), and/or **people** by name. Picks combine. The compose screen shows how many people (and who) it will reach before sending, with a warning confirm.
+- Recipients: active users with a Thunder role (Coach, Director, or on a team). Never the sender, inactive users, or pending requests. Fixed at send time.
+- Everyone has a bell in the header with an unread count. **Announcements** (the inbox) lists theirs newest first; opening it marks them read. Unread ones are outlined and tagged New.
+- Director: **Sent** list with who it went to, "N of M read", and who hasn't read it yet.
+- **Unread for 8 hours → one summary email** (from no-reply) listing all their unread announcements that are 8+ hours old, with a link to the inbox. Each announcement is emailed at most once; each person gets at most one such email every 8 hours. Reading in the app stops it. People with no email are skipped. Checked every 15 minutes while the server runs. `APP_URL` in `.env.local` is the link in the email.
+
+### Chats (planned)
+- Direct chat; team chat (that team's staff + Director, follows staff changes); Director-made groups. Coaches stay within their own teams' people and the Director. Same 8-hour email fallback.
+

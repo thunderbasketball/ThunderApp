@@ -1,8 +1,10 @@
 import Image from "next/image";
 import Link from "next/link";
 import { after } from "next/server";
+import { unreadCount } from "@/lib/announcements";
 import type { SessionUser } from "@/lib/auth/service";
 import { currentContexts } from "@/lib/contexts-server";
+import { db } from "@/lib/db";
 import { syncIfStale } from "@/lib/teamsnap/scheduler";
 import { LogoutButton } from "./HomeActions";
 import { Avatar } from "./ui";
@@ -12,7 +14,7 @@ type Tab = "teams" | "practice" | "users" | "players" | "coaches";
 // Sticky top bar: logo, the user, one chip per role to switch between them, and the Director tabs.
 // `context` is the role this page is shown as ("director" or "team:<id>"); it highlights that chip.
 export default async function AppHeader({ user, tab, context }: { user: SessionUser; tab?: Tab; context?: string }) {
-  const { contexts } = await currentContexts(user);
+  const [{ contexts }, unread] = await Promise.all([currentContexts(user), unreadCount({ pool: db, now: () => new Date() }, user)]);
   // Backup for the sheet timer: after this page is sent, refresh registrations if the last check is stale.
   after(syncIfStale);
   const tabs: { key: Tab; href: string; label: string }[] = [
@@ -37,6 +39,27 @@ export default async function AppHeader({ user, tab, context }: { user: SessionU
           {user.isDirector && (
             <Link href="/preview" className="hidden text-sm font-medium text-thunder-blue hover:underline md:block dark:text-blue-400">
               Preview
+            </Link>
+          )}
+          {user.hasThunderRole && (
+            <Link
+              href="/inbox"
+              prefetch={false}
+              aria-label={unread ? `Announcements, ${unread} unread` : "Announcements"}
+              className="relative rounded-full p-1.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-white"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden className="size-6">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0"
+                />
+              </svg>
+              {unread > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 flex min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-[11px] font-bold text-white tabular-nums">
+                  {unread > 99 ? "99+" : unread}
+                </span>
+              )}
             </Link>
           )}
           <p className="hidden truncate text-sm font-medium sm:block">
