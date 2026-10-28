@@ -1,7 +1,16 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { SessionUser } from "./auth/service";
 import { createTestDb } from "./testing/db";
-import { listInbox, listSent, markRead, previewAudience, sendAnnouncement, sendUnreadEmails, unreadCount } from "./announcements";
+import {
+  deleteAnnouncement,
+  listInbox,
+  listSent,
+  markRead,
+  previewAudience,
+  sendAnnouncement,
+  sendUnreadEmails,
+  unreadCount,
+} from "./announcements";
 
 const person = (coachId: string, firstName: string, isDirector = false): SessionUser => ({
   coachId,
@@ -91,6 +100,22 @@ describe("announcements", () => {
       message: "Only the Director can send announcements.",
     });
     expect((await previewAudience(deps(), head, { everyone: true })).ok).toBe(false);
+  });
+
+  it("the Director can remove one: gone from every inbox and never emailed", async () => {
+    const r = await sendAnnouncement(deps(), director, { ...msg, everyone: true });
+    if (!r.ok) throw new Error(r.message);
+    expect(await deleteAnnouncement(deps(), head, r.id)).toEqual({ ok: false, message: "Only the Director can remove announcements." });
+    expect(await unreadCount(deps(), head)).toBe(1);
+    expect(await deleteAnnouncement(deps(), director, r.id)).toEqual({ ok: true });
+    expect(await listInbox(deps(), head)).toEqual([]);
+    expect(await unreadCount(deps(), head)).toBe(0);
+    expect(await listSent(deps(), director)).toEqual([]);
+    expect(await deleteAnnouncement(deps(), director, r.id)).toMatchObject({ ok: false });
+    expect(await deleteAnnouncement(deps(), director, "1; drop table users")).toMatchObject({ ok: false });
+    const mail: string[] = [];
+    hours(9);
+    expect(await sendUnreadEmails({ ...deps(), appUrl: "x", sendEmail: async (to) => void mail.push(to) })).toBe(0);
   });
 
   it("inbox: only your own, newest first; opening marks read", async () => {

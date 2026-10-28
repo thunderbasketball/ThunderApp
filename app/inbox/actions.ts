@@ -25,3 +25,6 @@ export async function previewAudience(input: AudienceInput) {
 export async function sendAnnouncement(input: { title: unknown; body: unknown } & AudienceInput) {
   return guarded((u) => ann.sendAnnouncement(deps, u, input));
 }
+export async function deleteAnnouncement(id: string) {
+  return guarded((u) => ann.deleteAnnouncement(deps, u, String(id)));
+}

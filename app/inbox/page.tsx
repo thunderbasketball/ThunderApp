@@ -7,6 +7,7 @@ import { currentContexts } from "@/lib/contexts-server";
 import { db } from "@/lib/db";
 import { TZ } from "@/lib/time";
 import AppHeader from "../AppHeader";
+import RemoveButton from "./RemoveButton";
 import { PageTitle, card } from "../ui";
 
 export default function InboxPage({ searchParams }: PageProps<"/inbox">) {
@@ -115,6 +116,9 @@ function Sent({ items }: { items: Awaited<ReturnType<typeof listSent>> }) {
               <p className="mt-1 text-zinc-600 dark:text-zinc-300">{a.unread.join(", ")}</p>
             </details>
           )}
+          <div className="mt-3 border-t border-zinc-100 pt-3 text-right dark:border-white/5">
+            <RemoveButton id={a.id} title={a.title} />
+          </div>
         </article>
       ))}
     </div>

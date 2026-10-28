@@ -157,6 +157,14 @@ export async function markRead(deps: Deps, viewer: SessionUser, ids: string[]): 
   );
 }
 
+// Director: take an announcement back. It leaves every inbox, and any summary email not yet sent won't include it.
+export async function deleteAnnouncement(deps: Deps, viewer: SessionUser, id: unknown): Promise<Result> {
+  if (!viewer.isDirector) return { ok: false, message: "Only the Director can remove announcements." };
+  if (typeof id !== "string" || !/^\d{1,18}$/.test(id)) return { ok: false, message: "That announcement no longer exists." };
+  const r = await deps.pool.query("delete from announcements where id = $1", [id]); // recipients go with it
+  return r.rowCount ? { ok: true } : { ok: false, message: "That announcement no longer exists." };
+}
+
 export type SentItem = {
   id: string;
   title: string;
