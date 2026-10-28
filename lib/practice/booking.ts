@@ -4,7 +4,7 @@
 //   N = 0 → allowed.
 //   N = 1 → allowed only if the new slot starts within 72 hours from now (the "extra").
 //   N ≥ 2 → refused.
-// The Director is exempt. Blackouts never count. Everything runs in one transaction per request,
+// The Director is exempt (but not when booking from a team's view). Blackouts never count. Everything runs in one transaction per request,
 // with the team locked, so two people booking at once can't push a team over.
 import type { Pool, PoolClient } from "pg";
 import type { SessionUser } from "../auth/service";
@@ -40,14 +40,21 @@ export async function upcomingInWeek(q: Pick<PoolClient, "query">, teamId: strin
 
 async function canBookFor(q: PoolClient, viewer: SessionUser, teamId: string): Promise<boolean> {
   if (viewer.isDirector) return true;
-  const r = await q.query("select 1 from team_staff where team_id = $1 and coach_id = $2 and role = any($3)", [teamId, viewer.coachId, BOOKING_ROLES]);
+  const r = await q.query("select 1 from team_staff where team_id = $1 and coach_id = $2 and role = any($3)", [
+    teamId,
+    viewer.coachId,
+    BOOKING_ROLES,
+  ]);
   return !!r.rows[0];
 }
 
 type SlotRow = { id: string; court_id: string; starts_at: Date; team_id: string | null; blackout: boolean };
 
 async function lockSlot(q: PoolClient, id: string): Promise<SlotRow | null> {
-  const r = await q.query<SlotRow>("select id::text, court_id::text, starts_at, team_id::text, blackout from slots where id = $1 for update", [id]);
+  const r = await q.query<SlotRow>(
+    "select id::text, court_id::text, starts_at, team_id::text, blackout from slots where id = $1 for update",
+    [id],
+  );
   return r.rows[0] ?? null;
 }
 
@@ -71,18 +78,25 @@ export type BookResult = Result<{ booked: WeekOutcome[]; skipped: WeekOutcome[];
 
 const by = (v: SessionUser) => `${v.firstName} ${v.lastName}`;
 
-export async function bookSlot(deps: Deps, viewer: SessionUser, input: { slotId: unknown; teamId: unknown; everyWeek?: unknown }): Promise<BookResult> {
+export async function bookSlot(
+  deps: Deps,
+  viewer: SessionUser,
+  input: { slotId: unknown; teamId: unknown; everyWeek?: unknown; asTeam?: unknown },
+): Promise<BookResult> {
   const slotId = String(input.slotId ?? "");
   const teamId = String(input.teamId ?? "");
   if (!/^\d{1,18}$/.test(slotId) || !/^\d{1,18}$/.test(teamId)) return { ok: false, message: "Pick a practice slot and a team." };
   const now = deps.now();
+  // The Director is exempt, except when booking from a team's view (they see and book it as a coach would).
+  const exempt = viewer.isDirector && input.asTeam !== true;
   try {
     return await withTx(deps.pool, async (q) => {
       const team = await q.query("select 1 from teams where id = $1", [teamId]);
       if (!team.rows[0]) throw new UserError("That team no longer exists.");
       // One booking request per team at a time, so counts can't race.
       await q.query("select pg_advisory_xact_lock(hashtext('team-book:' || $1))", [teamId]);
-      if (!(await canBookFor(q, viewer, teamId))) throw new UserError("Only the Director or this team's coaches and manager can book its practices.");
+      if (!(await canBookFor(q, viewer, teamId)))
+        throw new UserError("Only the Director or this team's coaches and manager can book its practices.");
 
       const first = await lockSlot(q, slotId);
       if (!first) throw new UserError("That practice slot no longer exists.");
@@ -116,7 +130,7 @@ export async function bookSlot(deps: Deps, viewer: SessionUser, input: { slotId:
         }
         const check = limitCheck(await upcomingInWeek(q, teamId, s.starts_at, now), s.starts_at, now);
         if (!check.ok) {
-          if (!viewer.isDirector) {
+          if (!exempt) {
             skip(check.reason);
             continue;
           }
@@ -133,7 +147,11 @@ export async function bookSlot(deps: Deps, viewer: SessionUser, input: { slotId:
   }
 }
 
-export async function releaseSlot(deps: Deps, viewer: SessionUser, input: { slotId: unknown; everyWeek?: unknown }): Promise<Result<{ released: number }>> {
+export async function releaseSlot(
+  deps: Deps,
+  viewer: SessionUser,
+  input: { slotId: unknown; everyWeek?: unknown },
+): Promise<Result<{ released: number }>> {
   const slotId = String(input.slotId ?? "");
   if (!/^\d{1,18}$/.test(slotId)) return { ok: false, message: "Pick a practice slot." };
   const now = deps.now();
@@ -144,7 +162,8 @@ export async function releaseSlot(deps: Deps, viewer: SessionUser, input: { slot
       if (!first.team_id) throw new UserError("That slot isn't booked.");
       const teamId = first.team_id;
       await q.query("select pg_advisory_xact_lock(hashtext('team-book:' || $1))", [teamId]);
-      if (!(await canBookFor(q, viewer, teamId))) throw new UserError("Only the Director or this team's coaches and manager can release its practices.");
+      if (!(await canBookFor(q, viewer, teamId)))
+        throw new UserError("Only the Director or this team's coaches and manager can release its practices.");
       if (first.starts_at <= now) throw new UserError("That practice has already started.");
 
       const ids = [first.id, ...(input.everyWeek === true ? await sameSlotLaterWeeks(q, first) : [])];

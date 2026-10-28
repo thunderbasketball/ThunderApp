@@ -79,8 +79,10 @@ describe("booking", () => {
     rows.forEach((r, i) => (slot[`${r.name}:${r.day}:${r.hour}`] = ins.rows[i].id));
   });
 
-  const book = (who: SessionUser, key: string, everyWeek = false, t = team) => bookSlot(deps(), who, { slotId: slot[key], teamId: t, everyWeek });
-  const teamOf = async (key: string) => (await db.pool.query("select team_id::text, booked_by from slots where id = $1", [slot[key]])).rows[0];
+  const book = (who: SessionUser, key: string, everyWeek = false, t = team) =>
+    bookSlot(deps(), who, { slotId: slot[key], teamId: t, everyWeek });
+  const teamOf = async (key: string) =>
+    (await db.pool.query("select team_id::text, booked_by from slots where id = $1", [slot[key]])).rows[0];
 
   it("a coach books, and Booked By comes from the session", async () => {
     expect(await book(head, "North:13:18")).toMatchObject({ ok: true, booked: [{ slotId: slot["North:13:18"] }], skipped: [] });
@@ -153,6 +155,11 @@ describe("booking", () => {
     if (r.ok) expect(r.warnings).toHaveLength(1);
   });
 
+  it("from a team's view the Director follows the coach rules", async () => {
+    await book(director, "North:12:18");
+    expect(await bookSlot(deps(), director, { slotId: slot["North:13:18"], teamId: team, asTeam: true })).toMatchObject({ ok: false, message: /within 72 hours/ });
+  });
+
   it("only the Director and that team's coaches/manager can book", async () => {
     expect(await book(parent, "North:13:18")).toMatchObject({ ok: false, message: /Only the Director/ });
     expect(await book(otherHead, "North:13:18")).toMatchObject({ ok: false, message: /Only the Director/ });
@@ -186,6 +193,9 @@ describe("booking", () => {
   it("can't release a practice that already started", async () => {
     await book(head, "North:9:18");
     now = at(9, 18);
-    expect(await releaseSlot(deps(), head, { slotId: slot["North:9:18"] })).toEqual({ ok: false, message: "That practice has already started." });
+    expect(await releaseSlot(deps(), head, { slotId: slot["North:9:18"] })).toEqual({
+      ok: false,
+      message: "That practice has already started.",
+    });
   });
 });

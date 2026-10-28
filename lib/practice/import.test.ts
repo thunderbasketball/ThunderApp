@@ -3,9 +3,17 @@ import { createTestDb } from "../testing/db";
 import { zonedTime } from "../time";
 import { importPractice, parsePracticeTabs } from "./import";
 
-const gyms = [["Gym", "Court", "Active"], ["Action Church", "North", "TRUE"], ["Action Church", "South", "TRUE"], ["Heritage HS", "Main", "FALSE"]];
+const gyms = [
+  ["Gym", "Court", "Active"],
+  ["Action Church", "North", "TRUE"],
+  ["Action Church", "South", "TRUE"],
+  ["Heritage HS", "Main", "FALSE"],
+];
 const slots = (...rows: string[][]) => [["Gym", "Court", "Time", "Available", "Team", "Booked By"], ...rows];
-const blackouts = [["Date", "Gym", "Time", "Notes", "Blocked By"], ["11/26/2026", "ALL Gyms", "ALL", "Thanksgiving", ""]];
+const blackouts = [
+  ["Date", "Gym", "Time", "Notes", "Blocked By"],
+  ["11/26/2026", "ALL Gyms", "ALL", "Thanksgiving", ""],
+];
 
 describe("practice import", () => {
   let db: Awaited<ReturnType<typeof createTestDb>>;
@@ -17,7 +25,9 @@ describe("practice import", () => {
   });
   beforeEach(async () => {
     await db.reset();
-    await db.pool.query("insert into teams (name, gender, grades, grade_sort, level, created_by) values ('4G Epps', 'Girls', '{4}', 4, 'REC', 'x')");
+    await db.pool.query(
+      "insert into teams (name, gender, grades, grade_sort, level, created_by) values ('4G Epps', 'Girls', '{4}', 4, 'REC', 'x')",
+    );
   });
 
   const tabs = slots(
@@ -30,8 +40,18 @@ describe("practice import", () => {
 
   it("imports courts, slots, bookings and blackouts (with the holiday note)", async () => {
     const r = await importPractice(db.pool, parsePracticeTabs({ gyms, slots: tabs, blackouts }), opts);
-    expect(r).toMatchObject({ gyms: 2, courts: 3, slotsNew: 4, booked: { "4G Epps": 1 }, blackouts: 2, blackoutDates: 1, unknownTeams: [] });
-    expect((await db.pool.query("select day::text, gym_id, minute_of_day, reason from blackouts")).rows).toEqual([{ day: "2026-11-26", gym_id: null, minute_of_day: null, reason: "Thanksgiving" }]);
+    expect(r).toMatchObject({
+      gyms: 2,
+      courts: 3,
+      slotsNew: 4,
+      booked: { "4G Epps": 1 },
+      blackouts: 2,
+      blackoutDates: 1,
+      unknownTeams: [],
+    });
+    expect((await db.pool.query("select day::text, gym_id, minute_of_day, reason from blackouts")).rows).toEqual([
+      { day: "2026-11-26", gym_id: null, minute_of_day: null, reason: "Thanksgiving" },
+    ]);
     const s = await db.pool.query(
       `select g.name gym, c.name court, s.starts_at, t.name team, s.blackout, s.note, s.booked_by
        from slots s join courts c on c.id = s.court_id join gyms g on g.id = c.gym_id left join teams t on t.id = s.team_id order by s.starts_at, c.name`,
@@ -39,8 +59,13 @@ describe("practice import", () => {
     expect(s.rows[0]).toMatchObject({ court: "North", starts_at: zonedTime(2026, 11, 9, 18), team: "4G Epps", booked_by: "Earl Epps" });
     expect(s.rows[1]).toMatchObject({ team: null, blackout: false, booked_by: null });
     // Both Thanksgiving slots are blacked out: one marked "BLACKOUT: ..." in PracticeSlots, one from the BlackOuts tab.
-    expect(s.rows.slice(2).map((x) => [x.blackout, x.note])).toEqual([[true, "Turkey Day"], [true, "Thanksgiving"]]);
-    expect((await db.pool.query("select c.active from courts c join gyms g on g.id = c.gym_id where g.name = 'Heritage HS'")).rows[0].active).toBe(false);
+    expect(s.rows.slice(2).map((x) => [x.blackout, x.note])).toEqual([
+      [true, "Turkey Day"],
+      [true, "Thanksgiving"],
+    ]);
+    expect(
+      (await db.pool.query("select c.active from courts c join gyms g on g.id = c.gym_id where g.name = 'Heritage HS'")).rows[0].active,
+    ).toBe(false);
   });
 
   it("running again leaves existing slots alone; a dry run changes nothing", async () => {

@@ -69,7 +69,16 @@ export function parsePracticeTabs(tabs: { gyms: string[][]; slots: string[][]; b
     const team = teamText && !blackout ? teamText : null;
     if (!teamText && s(r, "Available") && !bool(s(r, "Available")))
       out.warnings.push({ row, tab: "PracticeSlots", message: "Marked not available but has no team; imported as open." });
-    out.slots.push({ row, gym, court, startsAt, team, blackout, blackoutNote: bm?.[1] || null, bookedBy: clean(s(r, "Booked By")) || null });
+    out.slots.push({
+      row,
+      gym,
+      court,
+      startsAt,
+      team,
+      blackout,
+      blackoutNote: bm?.[1] || null,
+      bookedBy: clean(s(r, "Booked By")) || null,
+    });
   });
 
   const b = cols(tabs.blackouts);
@@ -113,7 +122,8 @@ export async function importPractice(pool: Pool, parsed: ParsedPractice, opts: {
       const report = await run(q, parsed, opts.by);
       if (opts.dryRun) throw new DryRun(report);
       // Never drop a booking: a team name the app doesn't know stops the import.
-      if (report.unknownTeams.length) throw new Error(`Unknown team(s) in PracticeSlots: ${report.unknownTeams.join(", ")}. Nothing was changed.`);
+      if (report.unknownTeams.length)
+        throw new Error(`Unknown team(s) in PracticeSlots: ${report.unknownTeams.join(", ")}. Nothing was changed.`);
       return report;
     });
   } catch (e) {
@@ -123,7 +133,16 @@ export async function importPractice(pool: Pool, parsed: ParsedPractice, opts: {
 }
 
 async function run(q: PoolClient, p: ParsedPractice, by: string): Promise<ImportReport> {
-  const report: ImportReport = { gyms: 0, courts: 0, slotsNew: 0, slotsExisting: 0, booked: {}, blackouts: 0, blackoutDates: 0, unknownTeams: [] };
+  const report: ImportReport = {
+    gyms: 0,
+    courts: 0,
+    slotsNew: 0,
+    slotsExisting: 0,
+    booked: {},
+    blackouts: 0,
+    blackoutDates: 0,
+    unknownTeams: [],
+  };
   const courtId = new Map<string, string>();
   for (const c of p.courts) {
     const g = await q.query<{ id: string; created: boolean }>(
@@ -141,7 +160,9 @@ async function run(q: PoolClient, p: ParsedPractice, by: string): Promise<Import
     courtId.set(`${c.gym}|${c.court}`.toLowerCase(), ct.rows[0].id);
   }
 
-  const teams = new Map((await q.query<{ id: string; name: string }>("select id::text, name from teams")).rows.map((t) => [t.name.toLowerCase(), t.id]));
+  const teams = new Map(
+    (await q.query<{ id: string; name: string }>("select id::text, name from teams")).rows.map((t) => [t.name.toLowerCase(), t.id]),
+  );
   // Blackout notes by date (and gym/time when given).
   const noteFor = (s: SheetSlot) => {
     const lp = localParts(s.startsAt);
@@ -151,7 +172,9 @@ async function run(q: PoolClient, p: ParsedPractice, by: string): Promise<Import
         b.date.m === lp.month &&
         b.date.d === lp.day &&
         (!b.gym || b.gym.toLowerCase() === s.gym.toLowerCase()) &&
-        (!b.time || b.time.replace(/\s/g, "").toLowerCase() === `${lp.hour % 12 || 12}:${String(lp.minute).padStart(2, "0")}${lp.hour < 12 ? "am" : "pm"}`),
+        (!b.time ||
+          b.time.replace(/\s/g, "").toLowerCase() ===
+            `${lp.hour % 12 || 12}:${String(lp.minute).padStart(2, "0")}${lp.hour < 12 ? "am" : "pm"}`),
     );
     return hit?.note ?? null;
   };
@@ -166,7 +189,15 @@ async function run(q: PoolClient, p: ParsedPractice, by: string): Promise<Import
     const r = await q.query(
       `insert into slots (court_id, starts_at, team_id, blackout, note, booked_by, created_by)
        values ($1, $2, $3, $4, $5, $6, $7) on conflict (court_id, starts_at) do nothing`,
-      [courtId.get(`${s.gym}|${s.court}`.toLowerCase()), s.startsAt, teamId, blackout, blackout ? (s.blackoutNote ?? noteFor(s)) : null, teamId || blackout ? s.bookedBy ?? by : null, by],
+      [
+        courtId.get(`${s.gym}|${s.court}`.toLowerCase()),
+        s.startsAt,
+        teamId,
+        blackout,
+        blackout ? (s.blackoutNote ?? noteFor(s)) : null,
+        teamId || blackout ? (s.bookedBy ?? by) : null,
+        by,
+      ],
     );
     if (!r.rowCount) {
       report.slotsExisting++;
@@ -178,7 +209,9 @@ async function run(q: PoolClient, p: ParsedPractice, by: string): Promise<Import
   }
   // The BlackOuts tab, so slots added later on those dates come in blocked.
   for (const b of p.blackouts) {
-    const gymId = b.gym ? ((await q.query<{ id: string }>("select id::text from gyms where lower(name) = lower($1)", [b.gym])).rows[0]?.id ?? null) : null;
+    const gymId = b.gym
+      ? ((await q.query<{ id: string }>("select id::text from gyms where lower(name) = lower($1)", [b.gym])).rows[0]?.id ?? null)
+      : null;
     if (b.gym && !gymId) continue;
     const t = b.time?.match(/^(\d{1,2}):(\d{2})\s*([AP]M)$/i);
     const minute = t ? ((Number(t[1]) % 12) + (t[3].toUpperCase() === "PM" ? 12 : 0)) * 60 + Number(t[2]) : null;

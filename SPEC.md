@@ -139,7 +139,10 @@ Example: Team has Thu 6PM. Mon 6PM is within 72h → can add it (N=1). Once Mon 
 - **Add gym**: name, number of courts (1–6), a name for each court.
 - **Add practice slots**: gym, court (or all courts), From/To dates, days of the week, start times (8 AM–9 PM). 60-minute slots; existing ones are skipped; slots on blacked-out dates are added as blocked.
 - **Blackout dates**: Block or Restore; gym (or all gyms), From/To, time (or all day), reason. Blocking removes team bookings in the range (red warning first) and reports which. Restoring part of a wider blackout keeps the rest blocked. Past slots are never changed. Blacked-out dates are kept (from the sheet's BlackOuts tab) so later slots on them come in blocked.
-- The schedule shows one week at a time (Prev/Next), grouped by date, then gym, sorted by time.
+- **Yearly blackouts**: "Repeat every year" offers the choices that fit the chosen date (e.g. Nov 26 → "every Nov 26", "4th Thursday of November", "last Thursday of November"), keeping the number of days ("+ 1 day after"). Quick picks: Thanksgiving, Christmas, New Year's, MLK Day, Memorial Day, July 4th, Labor Day. Rules are filled in for this year through the later of two years ahead and the last slot, and again whenever slots are added. Removing a rule reopens its upcoming dates.
+- Director links inside Practice: **Schedule** (week grid like the old Master Practice Schedule: a card per day, gym, times, one line per court with Release / Block / Unblock / Book), **Season** (calendar of every month with open/booked/blocked days; tap a day for its week), **Blackouts** (yearly rules + upcoming dates), **Gyms** (courts, upcoming slots, teams approved).
+- **Team view** (team chip, or "Book practices" on the team page): open slots at the team's practice gyms plus its own bookings; other teams' bookings and blackouts are hidden. A banner shows where the team stands this week. Each open slot shows Book, or "Limit reached" / "View only". The Director in a team's view follows the coach rules; the Director chip is exempt.
+- Team pages list upcoming practices.
 
 ### Gyms
 - Director can add a gym, set the number of courts, and name each court.

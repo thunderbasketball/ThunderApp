@@ -1,13 +1,15 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { currentUser, devBypass } from "@/lib/auth/server";
+import { currentContexts } from "@/lib/contexts-server";
 import { db } from "@/lib/db";
-import { listGyms, pickWeek, weekSchedule } from "@/lib/practice/schedule";
-import { TZ } from "@/lib/time";
+import { listGyms, pickWeek, teamChoices, weekGrid } from "@/lib/practice/schedule";
 import AppHeader from "../AppHeader";
-import { Chip, PageTitle, card } from "../ui";
+import { PageTitle } from "../ui";
+import PracticeNav from "./PracticeNav";
 import { AddGymButton, AddSlotsButton, BlackoutButton } from "./PracticeTools";
+import WeekGridView from "./WeekGridView";
 
 export default function PracticePage({ searchParams }: PageProps<"/practice">) {
   return (
@@ -17,95 +19,76 @@ export default function PracticePage({ searchParams }: PageProps<"/practice">) {
   );
 }
 
-const time = (d: Date) => d.toLocaleTimeString("en-US", { timeZone: TZ, hour: "numeric", minute: "2-digit" });
-
 async function Practice({ searchParams }: { searchParams: PageProps<"/practice">["searchParams"] }) {
   const user = await currentUser();
   if (!user) redirect(devBypass ? "/dev-login" : "/login");
-  if (!user.isDirector) redirect("/");
+  const sp = await searchParams;
   const deps = { pool: db, now: () => new Date() };
-  const week = (await searchParams).week;
-  const start = await pickWeek(deps, typeof week === "string" ? week : undefined);
-  const [schedule, gyms] = await Promise.all([weekSchedule(deps, user, start), listGyms(deps)]);
-  const now = new Date();
-  const counts = schedule.days
-    .flatMap((d) => d.gyms.flatMap((g) => g.slots))
-    .reduce(
-      (n, s) => ({
-        open: n.open + (!s.team && !s.blackout ? 1 : 0),
-        booked: n.booked + (s.team ? 1 : 0),
-        blocked: n.blocked + (s.blackout ? 1 : 0),
-      }),
-      { open: 0, booked: 0, blocked: 0 },
-    );
+
+  // Team view when asked for (?team=) or when the person's current role is a team; otherwise the Director view.
+  const { active } = await currentContexts(user);
+  const asked = typeof sp.team === "string" && /^\d{1,18}$/.test(sp.team) ? sp.team : null;
+  const teamId = asked ?? (active?.key.startsWith("team:") ? active.key.slice(5) : null);
+  if (!teamId && !user.isDirector) redirect("/");
+  const mode = teamId ? "team" : "director";
+
+  const start = await pickWeek(deps, typeof sp.week === "string" ? sp.week : undefined);
+  let grid;
+  try {
+    grid = await weekGrid(deps, user, start, teamId ? { teamId } : "director");
+  } catch {
+    notFound();
+  }
+  const [gyms, teams] = mode === "director" ? await Promise.all([listGyms(deps), teamChoices(deps)]) : [[], []];
+  const link = (week: string) => `/practice?week=${week}${asked ? `&team=${asked}` : ""}`;
 
   return (
     <>
-      <AppHeader user={user} tab="practice" context="director" />
-      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6">
-        <PageTitle title="Practice" subtitle="Grouped by date, then gym, sorted by time" />
-        <div className="mb-5 flex flex-wrap gap-2">
-          <AddSlotsButton gyms={gyms} />
-          <BlackoutButton gyms={gyms} />
-          <AddGymButton />
-        </div>
+      <AppHeader user={user} tab="practice" context={mode === "director" ? "director" : `team:${teamId}`} />
+      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6">
+        {mode === "director" ? (
+          <>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <PageTitle title="Master Practice Schedule" subtitle="All practices, open gym slots and blocked dates" />
+              <div className="flex flex-wrap gap-2">
+                <AddGymButton />
+                <BlackoutButton gyms={gyms} />
+                <AddSlotsButton gyms={gyms} />
+              </div>
+            </div>
+            <PracticeNav current="schedule" />
+          </>
+        ) : (
+          <>
+            <Link href={`/teams/${teamId}`} className="text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-white">
+              ← {grid.team?.name}
+            </Link>
+            <div className="mt-2">
+              <PageTitle title="Book practices" subtitle="Open slots at your team's gyms, plus your team's practices" />
+            </div>
+          </>
+        )}
 
-        <div className={`${card} mb-4 flex items-center justify-between gap-2 px-2 py-2`}>
-          <Link
-            href={`/practice?week=${schedule.prev}`}
-            className="rounded-full px-3 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
-          >
-            ← Prev
+        <div className="mb-4 flex items-center justify-between gap-2 rounded-xl bg-zinc-100 px-2 py-2 dark:bg-zinc-900">
+          <Link href={link(grid.prev)} className="shrink-0 rounded-lg bg-zinc-800 px-3 py-1.5 text-sm font-semibold whitespace-nowrap text-white hover:bg-zinc-700">
+            ← <span className="hidden sm:inline">Previous week</span>
+            <span className="sm:hidden">Prev</span>
           </Link>
           <div className="text-center">
-            <p className="font-semibold">{schedule.label}</p>
-            <p className="text-xs text-zinc-500">
-              {counts.open} open · {counts.booked} booked · {counts.blocked} blocked
-            </p>
+            <p className="font-bold">{grid.label}</p>
+            {mode === "director" && (
+              <p className="text-xs text-zinc-500">
+                {grid.counts.open} open · {grid.counts.booked} booked · {grid.counts.blocked} blocked
+              </p>
+            )}
           </div>
-          <Link
-            href={`/practice?week=${schedule.next}`}
-            className="rounded-full px-3 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
-          >
-            Next →
+          <Link href={link(grid.next)} className="shrink-0 rounded-lg bg-zinc-800 px-3 py-1.5 text-sm font-semibold whitespace-nowrap text-white hover:bg-zinc-700">
+            <span className="hidden sm:inline">Next week</span>
+            <span className="sm:hidden">Next</span> →
           </Link>
         </div>
 
-        {!schedule.days.length && <p className="text-zinc-500">No practice slots this week. Use “+ Add slots” to create some.</p>}
-        <div className="space-y-3">
-          {schedule.days.map((d) => (
-            <section key={d.iso} className={`${card} overflow-hidden`}>
-              <h2 className="border-b border-zinc-100 px-4 py-3 font-semibold dark:border-white/5">{d.label}</h2>
-              {d.gyms.map((g) => (
-                <div key={g.gym}>
-                  <h3 className="bg-zinc-50 px-4 py-1.5 text-xs font-semibold tracking-wide text-zinc-500 uppercase dark:bg-white/5">
-                    {g.gym}
-                  </h3>
-                  <ul className="divide-y divide-zinc-100 dark:divide-white/5">
-                    {g.slots.map((s) => (
-                      <li key={s.id} className={`flex items-center gap-3 px-4 py-2.5 ${s.startsAt < now ? "opacity-50" : ""}`}>
-                        <span className="w-16 shrink-0 text-sm font-semibold tabular-nums">{time(s.startsAt)}</span>
-                        <span className="w-16 shrink-0 text-sm text-zinc-500">{s.court}</span>
-                        <span className="min-w-0 flex-1 text-sm">
-                          {s.blackout ? (
-                            <Chip tone="red">Blackout{s.note ? `: ${s.note}` : ""}</Chip>
-                          ) : s.team ? (
-                            <span className="flex flex-wrap items-center gap-x-2">
-                              <span className="font-semibold">{s.team}</span>
-                              <span className="text-xs text-zinc-500">by {s.bookedBy}</span>
-                            </span>
-                          ) : (
-                            <Chip tone="green">Open</Chip>
-                          )}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </section>
-          ))}
-        </div>
+        <WeekGridView grid={grid} mode={mode} teams={teams} />
       </main>
     </>
   );

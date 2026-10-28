@@ -5,6 +5,8 @@ import { currentUser, devBypass } from "@/lib/auth/server";
 import { db } from "@/lib/db";
 import { formatCell } from "@/lib/phone";
 import { currentContexts } from "@/lib/contexts-server";
+import { upcomingForTeam } from "@/lib/practice/schedule";
+import { TZ } from "@/lib/time";
 import { getTeam, personOptions, roleLabel } from "@/lib/teams";
 import AppHeader from "../../AppHeader";
 import { Chip, EmailLink, PersonRow, PhoneLink, card } from "../../ui";
@@ -35,6 +37,8 @@ async function Team({ params }: { params: PageProps<"/teams/[id]">["params"] }) 
   const canEditStaff = asDirector || team.myRoles.includes("HeadCoach");
   // Only the Director picks from the full user and volunteer lists; a head coach adds people by cell number.
   const options = asDirector ? await personOptions(deps, user) : null;
+  const practices = await upcomingForTeam(deps, team.id);
+  const canBook = asDirector || team.myRoles.some((r) => r !== "TeamParent");
 
   return (
     <>
@@ -122,6 +126,32 @@ async function Team({ params }: { params: PageProps<"/teams/[id]">["params"] }) 
                   )}
                 </div>
               </PersonRow>
+            ))}
+          </ul>
+        </section>
+        <section className={`${card} overflow-hidden`}>
+          <div className="flex items-center justify-between gap-3 px-4 pt-4 pb-3">
+            <h2 className="font-semibold">Upcoming practices ({practices.length})</h2>
+            <Link
+              href={`/practice?team=${team.id}`}
+              className="rounded-full bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700"
+            >
+              {canBook ? "Book practices" : "View schedule"}
+            </Link>
+          </div>
+          {!practices.length && <p className="px-4 pb-4 text-sm text-zinc-500">No practices booked yet.</p>}
+          <ul className="divide-y divide-zinc-100 border-t border-zinc-100 dark:divide-white/5 dark:border-white/5">
+            {practices.map((p) => (
+              <li key={p.id} className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm">
+                <span className="font-semibold">
+                  {p.startsAt.toLocaleDateString("en-US", { timeZone: TZ, weekday: "short", month: "numeric", day: "numeric" })} ·{" "}
+                  {p.startsAt.toLocaleTimeString("en-US", { timeZone: TZ, hour: "numeric", minute: "2-digit" })}
+                </span>
+                <span className="text-right text-zinc-500">
+                  {p.gym} {p.court}
+                  {p.bookedBy && <span className="block text-xs text-zinc-400">by {p.bookedBy}</span>}
+                </span>
+              </li>
             ))}
           </ul>
         </section>

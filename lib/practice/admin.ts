@@ -3,7 +3,11 @@
 import type { Pool, PoolClient } from "pg";
 import type { SessionUser } from "../auth/service";
 import { withTx } from "../sql";
-import { TZ, zonedTime } from "../time";
+import { zonedTime } from "../time";
+import { describeRule, insertRule, materializeRules, removeRule, specFrom, yearsToFill, type RuleKind } from "./rules";
+import { blockScope, reopenScope, type RemovedBooking } from "./scope";
+
+export type { RemovedBooking } from "./scope";
 
 type Deps = { pool: Pool; now: () => Date };
 type Result<T = object> = ({ ok: true } & T) | { ok: false; message: string };
@@ -32,7 +36,10 @@ function cleanPlaceName(v: unknown, what: string): string {
 
 const isId = (v: unknown): v is string => typeof v === "string" && /^\d{1,18}$/.test(v);
 
-function cleanRange(from: unknown, to: unknown): { from: string; to: string; days: { y: number; m: number; d: number; weekday: number; iso: string }[] } {
+function cleanRange(
+  from: unknown,
+  to: unknown,
+): { from: string; to: string; days: { y: number; m: number; d: number; weekday: number; iso: string }[] } {
   const re = /^(\d{4})-(\d{2})-(\d{2})$/;
   const a = typeof from === "string" ? from.match(re) : null;
   const b = typeof to === "string" ? to.match(re) : null;
@@ -44,7 +51,13 @@ function cleanRange(from: unknown, to: unknown): { from: string; to: string; day
   const days = [];
   for (let t = start; t <= end; t += 86_400_000) {
     const d = new Date(t);
-    days.push({ y: d.getUTCFullYear(), m: d.getUTCMonth() + 1, d: d.getUTCDate(), weekday: d.getUTCDay(), iso: d.toISOString().slice(0, 10) });
+    days.push({
+      y: d.getUTCFullYear(),
+      m: d.getUTCMonth() + 1,
+      d: d.getUTCDate(),
+      weekday: d.getUTCDay(),
+      iso: d.toISOString().slice(0, 10),
+    });
   }
   return { from: from as string, to: to as string, days };
 }
@@ -60,7 +73,9 @@ export async function addGym(deps: Deps, viewer: SessionUser, input: { name: unk
     const courts = list.map((c) => cleanPlaceName(c, "court name"));
     if (new Set(courts.map((c) => c.toLowerCase())).size !== courts.length) throw new UserError("Each court needs a different name.");
     return withTx(deps.pool, async (q) => {
-      const g = await q.query<{ id: string }>("insert into gyms (name) values ($1) on conflict (name) do nothing returning id::text", [name]);
+      const g = await q.query<{ id: string }>("insert into gyms (name) values ($1) on conflict (name) do nothing returning id::text", [
+        name,
+      ]);
       if (!g.rows[0]) throw new UserError(`There's already a gym named "${name}".`);
       await q.query("insert into courts (gym_id, name) select $1, unnest($2::text[])", [g.rows[0].id, courts]);
       return { id: g.rows[0].id };
@@ -84,7 +99,11 @@ export type AddSlotsInput = { gymId: unknown; courtId: unknown; from: unknown; t
 
 // Creates a 60-minute slot for each court × chosen day × start time. Existing ones are skipped;
 // slots on blacked-out dates come in blocked.
-export async function addSlots(deps: Deps, viewer: SessionUser, input: AddSlotsInput): Promise<Result<{ added: number; skipped: number; blocked: number }>> {
+export async function addSlots(
+  deps: Deps,
+  viewer: SessionUser,
+  input: AddSlotsInput,
+): Promise<Result<{ added: number; skipped: number; blocked: number }>> {
   if (!viewer.isDirector) return directorOnly;
   return run(async () => {
     if (!isId(input.gymId)) throw new UserError("Pick a gym.");
@@ -95,6 +114,9 @@ export async function addSlots(deps: Deps, viewer: SessionUser, input: AddSlotsI
     if (!hours.length) throw new UserError("Pick at least one start time.");
     const gymId = input.gymId;
     return withTx(deps.pool, async (q) => {
+      // Yearly blackouts for these years, so new slots on those dates come in blocked.
+      const years = [...new Set(range.days.map((d) => d.y))];
+      await materializeRules(q, years, deps.now());
       const courts = await q.query<{ id: string }>(
         input.courtId === "all"
           ? "select id::text from courts where gym_id = $1 and active order by name"
@@ -129,22 +151,22 @@ export async function addSlots(deps: Deps, viewer: SessionUser, input: AddSlotsI
 
 // ---- Blackouts ----
 
-export type BlackoutInput = { mode: unknown; gymId: unknown; from: unknown; to: unknown; hour: unknown; reason: unknown };
-export type RemovedBooking = { team: string; startsAt: Date; gym: string; court: string };
+export type BlackoutInput = { mode: unknown; gymId: unknown; from: unknown; to: unknown; hour: unknown; reason: unknown; repeat?: unknown };
 
-// Slots in scope: Eastern date in range, gym (or all), start hour (or all day). Past slots are never changed.
-const scopeSql = `
-  from slots s join courts c on c.id = s.court_id join gyms g on g.id = c.gym_id
-  where (s.starts_at at time zone '${TZ}')::date between $1 and $2
-    and ($3::bigint is null or c.gym_id = $3)
-    and ($4::int is null or extract(hour from s.starts_at at time zone '${TZ}') * 60 + extract(minute from s.starts_at at time zone '${TZ}') = $4)
-    and s.starts_at > $5`;
+function cleanReason(v: unknown): string | null {
+  const s = typeof v === "string" ? v.trim().replace(/\s+/g, " ") : "";
+  if (s && !/^[\p{L}\d][\p{L}\d .,'&()/-]{0,79}$/u.test(s))
+    throw new UserError("Keep the reason to letters, numbers and simple punctuation.");
+  return s || null;
+}
 
+// Block or restore a range. With repeat = "date" | "nth" | "last", blocking also saves a yearly rule
+// (anchored on the From date, same number of days) and fills it in for future years.
 export async function blackoutDates(
   deps: Deps,
   viewer: SessionUser,
   input: BlackoutInput,
-): Promise<Result<{ slots: number; removed: RemovedBooking[] }>> {
+): Promise<Result<{ slots: number; removed: RemovedBooking[]; rule: string | null }>> {
   if (!viewer.isDirector) return directorOnly;
   return run(async () => {
     const mode = input.mode === "block" || input.mode === "restore" ? input.mode : null;
@@ -154,54 +176,44 @@ export async function blackoutDates(
     if (gymId === undefined) throw new UserError("Pick a gym.");
     const minute = input.hour === "all" ? null : SLOT_HOURS.includes(input.hour as number) ? (input.hour as number) * 60 : undefined;
     if (minute === undefined) throw new UserError("Pick a time.");
-    const reasonText = typeof input.reason === "string" ? input.reason.trim().replace(/\s+/g, " ") : "";
-    if (reasonText && !/^[\p{L}\d][\p{L}\d .,'&()/-]{0,79}$/u.test(reasonText)) throw new UserError("Keep the reason to letters, numbers and simple punctuation.");
-    const reason = reasonText || null;
+    const reason = cleanReason(input.reason);
+    const repeat = input.repeat === "date" || input.repeat === "nth" || input.repeat === "last" ? (input.repeat as RuleKind) : null;
+    if (repeat && range.days.length > 14) throw new UserError("A yearly blackout can cover up to 14 days.");
     const now = deps.now();
-    const args = [range.from, range.to, gymId, minute, now];
+    const scope = { from: range.from, to: range.to, gymId, minute, now };
 
     return withTx(deps.pool, async (q) => {
       if (gymId) {
         const g = await q.query("select 1 from gyms where id = $1", [gymId]);
         if (!g.rows[0]) throw new UserError("That gym no longer exists.");
       }
-      // Bookings are changed below; lock the affected slots first.
-      await q.query(`select s.id ${scopeSql} for update of s`, args);
-
       if (mode === "block") {
+        const res = await blockScope(q, scope, { reason, by: by(viewer) });
+        if (!repeat) return { ...res, rule: null };
+        const spec = specFrom(range.from, repeat, range.days.length);
+        const ruleId = await insertRule(q, spec, { gymId, minute, reason, by: by(viewer) });
         await q.query(
-          `insert into blackouts (day, gym_id, minute_of_day, reason, created_by)
-           select d::date, $3, $4, $5, $6 from generate_series($1::date, $2::date, interval '1 day') d
-           on conflict (day, coalesce(gym_id, 0), coalesce(minute_of_day, -1)) do update set reason = excluded.reason`,
-          [range.from, range.to, gymId, minute, reason, by(viewer)],
+          "update blackouts set rule_id = $1 where day between $2 and $3 and coalesce(gym_id, 0) = coalesce($4::bigint, 0) and coalesce(minute_of_day, -1) = coalesce($5::int, -1)",
+          [ruleId, range.from, range.to, gymId, minute],
         );
-        const removed = await q.query<RemovedBooking>(
-          `select t.name as team, s.starts_at as "startsAt", g.name as gym, c.name as court ${scopeSql.replace("from slots s", "from slots s join teams t on t.id = s.team_id")}
-           order by s.starts_at, g.name, c.name`,
-          args,
-        );
-        const r = await q.query(
-          `update slots set blackout = true, team_id = null, note = $6, booked_by = $7, booked_at = $5
-           where id in (select s.id ${scopeSql})`,
-          [...args, reason, by(viewer)],
-        );
-        return { slots: r.rowCount ?? 0, removed: removed.rows };
+        const more = await materializeRules(q, await yearsToFill(q, now), now, ruleId);
+        return { slots: res.slots + more.slots, removed: [...res.removed, ...more.removed], rule: describeRule(spec) };
       }
 
       // Restore. Restoring part of a wider blackout (one gym of "All Gyms", one time of "All Day") first splits it,
       // so the rest stays blacked out. Then remove the entries in scope and reopen slots no blackout still covers.
       if (gymId)
         await q.query(
-          `insert into blackouts (day, gym_id, minute_of_day, reason, created_by)
-           select b.day, g.id, b.minute_of_day, b.reason, b.created_by from blackouts b cross join gyms g
+          `insert into blackouts (day, gym_id, minute_of_day, reason, created_by, rule_id)
+           select b.day, g.id, b.minute_of_day, b.reason, b.created_by, b.rule_id from blackouts b cross join gyms g
            where b.gym_id is null and g.id <> $3 and b.day between $1 and $2 and ($4::int is null or b.minute_of_day = $4 or b.minute_of_day is null)
            on conflict (day, coalesce(gym_id, 0), coalesce(minute_of_day, -1)) do nothing`,
           [range.from, range.to, gymId, minute],
         );
       if (minute !== null)
         await q.query(
-          `insert into blackouts (day, gym_id, minute_of_day, reason, created_by)
-           select b.day, b.gym_id, h * 60, b.reason, b.created_by from blackouts b cross join unnest($5::int[]) h
+          `insert into blackouts (day, gym_id, minute_of_day, reason, created_by, rule_id)
+           select b.day, b.gym_id, h * 60, b.reason, b.created_by, b.rule_id from blackouts b cross join unnest($5::int[]) h
            where b.minute_of_day is null and h * 60 <> $4 and b.day between $1 and $2 and ($3::bigint is null or b.gym_id is null or b.gym_id = $3)
            on conflict (day, coalesce(gym_id, 0), coalesce(minute_of_day, -1)) do nothing`,
           [range.from, range.to, gymId, minute, SLOT_HOURS],
@@ -211,17 +223,48 @@ export async function blackoutDates(
            and ($4::int is null or minute_of_day = $4 or minute_of_day is null)`,
         [range.from, range.to, gymId, minute],
       );
-      const r = await q.query(
-        `update slots set blackout = false, note = null, booked_by = null, booked_at = null
-         where id in (select s.id ${scopeSql} and s.blackout
-                        and not exists (select 1 from blackouts b
-                                        where b.day = (s.starts_at at time zone '${TZ}')::date
-                                          and (b.gym_id is null or b.gym_id = c.gym_id)
-                                          and (b.minute_of_day is null or b.minute_of_day =
-                                               extract(hour from s.starts_at at time zone '${TZ}') * 60 + extract(minute from s.starts_at at time zone '${TZ}'))))`,
-        args,
+      return { slots: await reopenScope(q, scope), removed: [], rule: null };
+    });
+  });
+}
+
+export async function deleteBlackoutRule(deps: Deps, viewer: SessionUser, ruleId: unknown): Promise<Result<{ reopened: number }>> {
+  if (!viewer.isDirector) return directorOnly;
+  if (!isId(ruleId)) return { ok: false, message: "That yearly blackout no longer exists." };
+  return run(() => withTx(deps.pool, async (q) => ({ reopened: await removeRule(q, ruleId, deps.now()) })));
+}
+
+// The Director's Block / Unblock on a single slot (no date record; just that slot).
+export async function setSlotBlocked(
+  deps: Deps,
+  viewer: SessionUser,
+  input: { slotId: unknown; blocked: unknown; reason?: unknown },
+): Promise<Result<{ removed: string | null }>> {
+  if (!viewer.isDirector) return directorOnly;
+  if (!isId(input.slotId)) return { ok: false, message: "That practice slot no longer exists." };
+  const slotId = input.slotId;
+  return run(async () => {
+    const reason = cleanReason(input.reason);
+    return withTx(deps.pool, async (q) => {
+      const s = await q.query<{ team: string | null; starts_at: Date }>(
+        "select t.name as team, s.starts_at from slots s left join teams t on t.id = s.team_id where s.id = $1 for update of s",
+        [slotId],
       );
-      return { slots: r.rowCount ?? 0, removed: [] };
+      if (!s.rows[0]) throw new UserError("That practice slot no longer exists.");
+      if (s.rows[0].starts_at <= deps.now()) throw new UserError("That practice time has already passed.");
+      if (input.blocked === true) {
+        await q.query("update slots set blackout = true, team_id = null, note = $2, booked_by = $3, booked_at = $4 where id = $1", [
+          slotId,
+          reason,
+          by(viewer),
+          deps.now(),
+        ]);
+        return { removed: s.rows[0].team };
+      }
+      await q.query("update slots set blackout = false, note = null, booked_by = null, booked_at = null where id = $1 and blackout", [
+        slotId,
+      ]);
+      return { removed: null };
     });
   });
 }
