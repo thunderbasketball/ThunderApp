@@ -8,7 +8,7 @@ const g = globalThis as unknown as { thunderSyncTimer?: NodeJS.Timeout };
 export function startRegistrationSync() {
   const sheet = process.env.REGISTRATIONS_SHEET;
   if (!sheet || g.thunderSyncTimer) return;
-  const minutes = Math.max(1, Number(process.env.REGISTRATIONS_SYNC_MINUTES) || 10);
+  const minutes = Math.max(1, Number(process.env.REGISTRATIONS_SYNC_MINUTES) || 5);
   const tab = process.env.REGISTRATIONS_TAB ?? "TeamSnapAPI";
 
   const run = async () => {

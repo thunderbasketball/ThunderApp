@@ -16,7 +16,7 @@ Secrets live only in `.env.local` (never committed, never pasted into chat). Two
 - `npm run user -- list | add <cell> <first> <last> [email] | director <cell> | delete <cell>` — test accounts until the Users tab exists
 - `npm run import:teamsnap -- --sheet [--dry-run]` (or a `"data/import/<file>.csv"` path) — replace registrations from the Winter Registrations sheet's TeamSnapAPI tab (all columns kept; birthdates shifted +1 day when TeamSnap shows an evening time)
 - Google Sheets: read as service account `thunder-sheets@thunderapp-513001.iam.gserviceaccount.com` via `lib/google/sheets.ts`; key in `data/google-service-account.json` (never print or paste it); sheet links in `.env.local` (`REGISTRATIONS_SHEET`). Share each sheet with that email.
-- While the server runs, `instrumentation.ts` syncs registrations from the sheet every `REGISTRATIONS_SYNC_MINUTES` (default 10) via `lib/teamsnap/sync.ts`: replaces only when the tab changed, never on parse errors or a >50% drop; status in the `sync_status` table, shown on the Players page.
+- While the server runs, `instrumentation.ts` syncs registrations from the sheet every `REGISTRATIONS_SYNC_MINUTES` (default 5) via `lib/teamsnap/sync.ts`: replaces only when the tab changed, never on parse errors or a >50% drop; status in the `sync_status` table, shown on the Players page.
 - `data/` holds real exports with personal info: gitignored, never commit or paste it
 - Database access is server-only via `lib/db.ts` (pg pool on `DATABASE_URL`, Supabase Session pooler).
   Tables live in `public` (visible in the Supabase dashboard), locked: every new table needs `enable row level security` + `revoke all ... from anon, authenticated` (see 003_lock_tables.sql). Tests run in a throwaway `app_test_*` schema.
