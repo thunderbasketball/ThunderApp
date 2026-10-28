@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import type { SessionUser } from "@/lib/auth/service";
 import { LogoutButton } from "./HomeActions";
@@ -12,15 +13,14 @@ export default function AppHeader({ user, tab }: { user: SessionUser; tab?: "use
     { key: "coaches", href: "/coaches", label: "Coaches" },
   ];
   return (
-    <header className="sticky top-0 z-10 border-b border-zinc-950/5 bg-white/80 backdrop-blur-xl dark:border-white/10 dark:bg-zinc-950/80">
+    <header className="sticky top-0 z-10 border-t-[3px] border-t-thunder-orange border-b border-zinc-950/5 bg-white/80 backdrop-blur-xl dark:border-white/10 dark:bg-zinc-950/80">
       <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-4 py-3">
         <Link href="/" className="flex items-center gap-2">
-          <span className="flex size-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-sm">
-            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden className="size-5">
-              <path d="M13.5 2 4 13.5h6.5L9.5 22 20 9.5h-6.5L13.5 2Z" />
-            </svg>
+          <Image src="/brand/logo-96.png" alt="Thunder Basketball" width={36} height={36} priority className="size-9" />
+          <span className="leading-tight">
+            <span className="block font-semibold tracking-tight">Thunder</span>
+            <span className="block text-xs font-medium text-thunder-orange">Basketball</span>
           </span>
-          <span className="font-semibold tracking-tight">Thunder</span>
         </Link>
         <div className="flex min-w-0 items-center gap-3">
           <div className="hidden min-w-0 text-right sm:block">
@@ -29,7 +29,7 @@ export default function AppHeader({ user, tab }: { user: SessionUser; tab?: "use
             </p>
             <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">{roles.join(" · ") || "No role yet"}</p>
           </div>
-          <Avatar first={user.firstName} last={user.lastName} tone="blue" />
+          <Avatar first={user.firstName} last={user.lastName} tone="orange" />
           <LogoutButton />
         </div>
       </div>
@@ -43,7 +43,7 @@ export default function AppHeader({ user, tab }: { user: SessionUser; tab?: "use
                 aria-current={tab === t.key ? "page" : undefined}
                 className={`flex-1 rounded-full px-3 py-1.5 text-center text-sm font-medium transition-colors sm:flex-none sm:px-6 ${
                   tab === t.key
-                    ? "bg-white text-zinc-900 shadow-sm ring-1 ring-zinc-200 dark:bg-zinc-700 dark:text-white dark:ring-zinc-600"
+                    ? "bg-thunder-blue text-white shadow-sm"
                     : "text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white"
                 }`}
               >

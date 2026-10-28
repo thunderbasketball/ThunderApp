@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import Image from "next/image";
 import { redirect } from "next/navigation";
 import { currentUser, devBypass } from "@/lib/auth/server";
 import LoginFlow from "./LoginFlow";
@@ -8,11 +9,7 @@ export default function LoginPage() {
   return (
     <main className="mx-auto w-full max-w-sm flex-1 px-4 py-12">
       <div className="mb-8 flex flex-col items-center gap-3">
-        <span className="flex size-14 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-md">
-          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden className="size-8">
-            <path d="M13.5 2 4 13.5h6.5L9.5 22 20 9.5h-6.5L13.5 2Z" />
-          </svg>
-        </span>
+        <Image src="/brand/logo-256.png" alt="Thunder Basketball logo" width={112} height={112} priority className="size-28" />
         <h1 className="text-2xl font-semibold tracking-tight">Thunder Basketball</h1>
       </div>
       {devBypass && (

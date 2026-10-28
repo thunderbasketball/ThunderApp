@@ -3,9 +3,10 @@ import type { ReactNode } from "react";
 
 export const card = "rounded-2xl bg-white shadow-sm ring-1 ring-zinc-950/5 dark:bg-zinc-900 dark:ring-white/10";
 
-type Tone = "blue" | "green" | "amber" | "red" | "pink" | "zinc";
+type Tone = "blue" | "orange" | "green" | "amber" | "red" | "pink" | "zinc";
 const tones: Record<Tone, string> = {
   blue: "bg-blue-50 text-blue-700 ring-blue-600/20 dark:bg-blue-500/10 dark:text-blue-300 dark:ring-blue-400/30",
+  orange: "bg-orange-50 text-orange-700 ring-orange-600/25 dark:bg-orange-500/10 dark:text-orange-300 dark:ring-orange-400/30",
   green: "bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-400/30",
   amber: "bg-amber-50 text-amber-800 ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-400/30",
   red: "bg-red-50 text-red-700 ring-red-600/20 dark:bg-red-500/10 dark:text-red-300 dark:ring-red-400/30",

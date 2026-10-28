@@ -12,7 +12,8 @@ export function loadServiceAccount(
 ): ServiceAccount {
   let key: Partial<ServiceAccount>;
   try {
-    key = JSON.parse(readFileSync(file, "utf8"));
+    // Read at runtime only; keeps the build from bundling the project folder (and data/) into the server output.
+    key = JSON.parse(readFileSync(/*turbopackIgnore: true*/ file, "utf8"));
   } catch {
     throw new Error(`Can't read the Google key file at ${file}.`);
   }
