@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { SessionUser } from "./auth/service";
 import { createTestDb } from "./testing/db";
-import { addUser, deleteUser, denyRequest, updateUser } from "./user-admin";
+import { hashPin } from "./auth/crypto";
+import { addUser, deleteUser, denyRequest, resetLogin, updateUser } from "./user-admin";
 
 const director: SessionUser = {
   coachId: "9913694",
@@ -93,6 +94,18 @@ describe("user admin", () => {
       ok: false,
       message: expect.stringMatching(/same 7 digits as New Coach/),
     });
+  });
+
+  it("reset login: PIN back to 1234, email cleared, logged out, lockout cleared", async () => {
+    await db.pool.query("update users set pin_hash = $1 where coach_id = '5550001'", [await hashPin("2468")]);
+    await db.pool.query("insert into sessions (token_hash, coach_id, created_at, expires_at) values ('x', '5550001', $1, $1)", [now]);
+    await db.pool.query("insert into pin_lockouts (cell, failed_count) values ('4235550001', 3)");
+    expect(await resetLogin(deps(), director, "5550001")).toEqual({ ok: true });
+    expect(await user("5550001")).toMatchObject({ pin_hash: null, email: null, verified_email: null, updated_by: "Earl Epps", first_name: "Pat" });
+    expect((await db.pool.query("select count(*)::int n from sessions where coach_id = '5550001'")).rows[0].n).toBe(0);
+    expect((await db.pool.query("select count(*)::int n from pin_lockouts where cell = '4235550001'")).rows[0].n).toBe(0);
+    expect(await resetLogin(deps(), director, "9913694")).toEqual({ ok: false, message: "You can't reset your own login." });
+    expect((await resetLogin(deps(), coach, "5550002")).ok).toBe(false);
   });
 
   it("deletes only where appropriate", async () => {

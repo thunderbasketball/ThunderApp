@@ -1,4 +1,4 @@
-// Director tools for users: add, edit (name, email, Active, Coach, Director), approve/deny requests, delete.
+// Director tools for users: add, edit (name, email, Active, Coach, Director), approve/deny requests, reset login, delete.
 // Never writes the Scenic City columns.
 import type { Pool } from "pg";
 import type { SessionUser } from "./auth/service";
@@ -96,6 +96,28 @@ export async function addUser(deps: Deps, viewer: SessionUser, input: AddUserInp
       return { coachId };
     });
   });
+}
+
+// Reset login: back to starter PIN 1234 with no email, logged out everywhere, PIN lockout cleared.
+// At their next login they give an email, confirm it with a code, and choose a new PIN.
+export async function resetLogin(deps: Deps, viewer: SessionUser, coachId: string): Promise<Result> {
+  if (!viewer.isDirector) return directorOnly;
+  if (!/^\d{7}$/.test(coachId)) return { ok: false, message: "That user no longer exists." };
+  if (coachId === viewer.coachId) return { ok: false, message: "You can't reset your own login." };
+  return run(() =>
+    withTx(deps.pool, async (q) => {
+      const r = await q.query<{ cell: string }>(
+        `update users set pin_hash = null, email = null, verified_email = null, updated_at = $2, updated_by = $3
+         where coach_id = $1 returning cell`,
+        [coachId, deps.now(), by(viewer)],
+      );
+      if (!r.rows[0]) throw new UserError("That user no longer exists.");
+      await q.query("delete from sessions where coach_id = $1", [coachId]);
+      await q.query("delete from pin_lockouts where cell = $1", [r.rows[0].cell]);
+      await q.query("delete from email_codes where cell = $1", [r.rows[0].cell]);
+      return {};
+    }),
+  );
 }
 
 // Why a user can't be deleted, or null if they can. Deactivate is the safe alternative.
