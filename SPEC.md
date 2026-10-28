@@ -135,6 +135,12 @@ Example: Team has Thu 6PM. Mon 6PM is within 72h → can add it (N=1). Once Mon 
 
 - Enforced on the server inside a transaction. The UI uses the same rule to show messages ahead of time.
 
+### Director tools (Practice tab)
+- **Add gym**: name, number of courts (1–6), a name for each court.
+- **Add practice slots**: gym, court (or all courts), From/To dates, days of the week, start times (8 AM–9 PM). 60-minute slots; existing ones are skipped; slots on blacked-out dates are added as blocked.
+- **Blackout dates**: Block or Restore; gym (or all gyms), From/To, time (or all day), reason. Blocking removes team bookings in the range (red warning first) and reports which. Restoring part of a wider blackout keeps the rest blocked. Past slots are never changed. Blacked-out dates are kept (from the sheet's BlackOuts tab) so later slots on them come in blocked.
+- The schedule shows one week at a time (Prev/Next), grouped by date, then gym, sorted by time.
+
 ### Gyms
 - Director can add a gym, set the number of courts, and name each court.
 - "Approved Practice Locations" = checkbox list of unique gyms (used to choose which gyms a team or the schedule shows).

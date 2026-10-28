@@ -7,7 +7,7 @@ import { syncIfStale } from "@/lib/teamsnap/scheduler";
 import { LogoutButton } from "./HomeActions";
 import { Avatar } from "./ui";
 
-type Tab = "teams" | "users" | "players" | "coaches";
+type Tab = "teams" | "practice" | "users" | "players" | "coaches";
 
 // Sticky top bar: logo, the user, one chip per role to switch between them, and the Director tabs.
 // `context` is the role this page is shown as ("director" or "team:<id>"); it highlights that chip.
@@ -17,6 +17,7 @@ export default async function AppHeader({ user, tab, context }: { user: SessionU
   after(syncIfStale);
   const tabs: { key: Tab; href: string; label: string }[] = [
     { key: "teams", href: "/teams", label: "Teams" },
+    { key: "practice", href: "/practice", label: "Practice" },
     { key: "users", href: "/users", label: "Users" },
     { key: "players", href: "/players", label: "Players" },
     { key: "coaches", href: "/coaches", label: "Coaches" },

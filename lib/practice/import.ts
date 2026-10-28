@@ -96,6 +96,7 @@ export type ImportReport = {
   slotsExisting: number;
   booked: Record<string, number>;
   blackouts: number;
+  blackoutDates: number;
   unknownTeams: string[];
 };
 
@@ -122,7 +123,7 @@ export async function importPractice(pool: Pool, parsed: ParsedPractice, opts: {
 }
 
 async function run(q: PoolClient, p: ParsedPractice, by: string): Promise<ImportReport> {
-  const report: ImportReport = { gyms: 0, courts: 0, slotsNew: 0, slotsExisting: 0, booked: {}, blackouts: 0, unknownTeams: [] };
+  const report: ImportReport = { gyms: 0, courts: 0, slotsNew: 0, slotsExisting: 0, booked: {}, blackouts: 0, blackoutDates: 0, unknownTeams: [] };
   const courtId = new Map<string, string>();
   for (const c of p.courts) {
     const g = await q.query<{ id: string; created: boolean }>(
@@ -174,6 +175,19 @@ async function run(q: PoolClient, p: ParsedPractice, by: string): Promise<Import
     report.slotsNew++;
     if (blackout) report.blackouts++;
     if (teamId) report.booked[s.team!] = (report.booked[s.team!] ?? 0) + 1;
+  }
+  // The BlackOuts tab, so slots added later on those dates come in blocked.
+  for (const b of p.blackouts) {
+    const gymId = b.gym ? ((await q.query<{ id: string }>("select id::text from gyms where lower(name) = lower($1)", [b.gym])).rows[0]?.id ?? null) : null;
+    if (b.gym && !gymId) continue;
+    const t = b.time?.match(/^(\d{1,2}):(\d{2})\s*([AP]M)$/i);
+    const minute = t ? ((Number(t[1]) % 12) + (t[3].toUpperCase() === "PM" ? 12 : 0)) * 60 + Number(t[2]) : null;
+    const r = await q.query(
+      `insert into blackouts (day, gym_id, minute_of_day, reason, created_by) values (make_date($1, $2, $3), $4, $5, $6, $7)
+       on conflict (day, coalesce(gym_id, 0), coalesce(minute_of_day, -1)) do nothing`,
+      [b.date.y, b.date.m, b.date.d, gymId, minute, b.note, by],
+    );
+    report.blackoutDates += r.rowCount ?? 0;
   }
   return report;
 }

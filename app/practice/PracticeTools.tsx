@@ -1,0 +1,372 @@
+"use client";
+
+import { useRef, useState, useTransition, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
+import type { GymWithCourts } from "@/lib/practice/schedule";
+import { addGym, addSlots, blackoutDates } from "./actions";
+import { Alert, CloseButton, Toast, dialogCls, useConfirm } from "../client-ui";
+import { fieldLabel, inputCls, pillCls, primaryBtn } from "../ui";
+
+const HOURS = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21];
+const hourLabel = (h: number) => `${h % 12 || 12} ${h < 12 ? "AM" : "PM"}`;
+const DAYS = [
+  [1, "Mon"],
+  [2, "Tue"],
+  [3, "Wed"],
+  [4, "Thu"],
+  [5, "Fri"],
+  [6, "Sat"],
+  [0, "Sun"],
+] as const;
+const todayIso = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date());
+
+// A button that opens a pop-up with a title and a form; `onSubmit` returns an error message or a success message.
+function ToolDialog({
+  label,
+  title,
+  tone = "blue",
+  submitLabel,
+  canSubmit,
+  onOpen,
+  beforeSubmit,
+  onSubmit,
+  children,
+}: {
+  label: string;
+  title: string;
+  tone?: "blue" | "red";
+  submitLabel: string;
+  canSubmit: boolean;
+  onOpen?: () => void;
+  beforeSubmit?: () => Promise<boolean>; // e.g. an "are you sure?" box; runs before any work starts
+  onSubmit: () => Promise<{ error?: string; done?: string }>;
+  children: ReactNode;
+}) {
+  const router = useRouter();
+  const dialog = useRef<HTMLDialogElement>(null);
+  const close = () => dialog.current?.close();
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+  const [busy, start] = useTransition();
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => {
+          setError(null);
+          onOpen?.();
+          dialog.current?.showModal();
+        }}
+        className={
+          tone === "red"
+            ? "rounded-full px-4 py-2 text-sm font-semibold text-red-600 ring-1 ring-red-600/30 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
+            : "rounded-full bg-thunder-blue px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-thunder-blue-dark"
+        }
+      >
+        {label}
+      </button>
+      {done && <Toast key={done} message={done} />}
+      <dialog ref={dialog} className={dialogCls} onClick={(e) => e.target === dialog.current && close()}>
+        <form
+          className="space-y-4 p-5"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            setError(null);
+            if (beforeSubmit && !(await beforeSubmit())) return;
+            start(async () => {
+              const r = await onSubmit();
+              if (r.error) return setError(r.error);
+              close();
+              setDone(r.done ?? "Done.");
+              router.refresh();
+            });
+          }}
+        >
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold">{title}</h2>
+            <CloseButton onClick={close} />
+          </div>
+          {children}
+          {error && <Alert tone="red">{error}</Alert>}
+          <button
+            type="submit"
+            disabled={busy || !canSubmit}
+            className={tone === "red" ? `${primaryBtn} !bg-red-600 hover:!bg-red-700` : primaryBtn}
+          >
+            {busy ? "Working…" : submitLabel}
+          </button>
+        </form>
+      </dialog>
+    </>
+  );
+}
+
+function GymSelect({
+  gyms,
+  value,
+  onChange,
+  allLabel,
+}: {
+  gyms: GymWithCourts[];
+  value: string;
+  onChange: (v: string) => void;
+  allLabel?: string;
+}) {
+  return (
+    <select className={inputCls} value={value} onChange={(e) => onChange(e.target.value)}>
+      {allLabel && <option value="all">{allLabel}</option>}
+      {!allLabel && <option value="">Choose…</option>}
+      {gyms.map((g) => (
+        <option key={g.id} value={g.id}>
+          {g.name}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function DateRange({ from, to, setFrom, setTo }: { from: string; to: string; setFrom: (v: string) => void; setTo: (v: string) => void }) {
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      <label className="block">
+        <span className={fieldLabel}>From</span>
+        <input type="date" className={inputCls} value={from} onChange={(e) => setFrom(e.target.value)} />
+      </label>
+      <label className="block">
+        <span className={fieldLabel}>To</span>
+        <input type="date" className={inputCls} value={to} min={from} onChange={(e) => setTo(e.target.value)} />
+      </label>
+    </div>
+  );
+}
+
+export function AddGymButton() {
+  const [name, setName] = useState("");
+  const [courts, setCourts] = useState(["Court 1", "Court 2"]);
+  const setCount = (n: number) => setCourts((c) => Array.from({ length: n }, (_, i) => c[i] ?? `Court ${i + 1}`));
+  return (
+    <ToolDialog
+      label="+ Add gym"
+      title="Add gym"
+      submitLabel="Add gym"
+      canSubmit={!!name.trim() && courts.every((c) => c.trim())}
+      onOpen={() => {
+        setName("");
+        setCourts(["Court 1", "Court 2"]);
+      }}
+      onSubmit={async () => {
+        const r = await addGym({ name, courts });
+        return r.ok ? { done: `${name.trim()} added with ${courts.length} court${courts.length > 1 ? "s" : ""}.` } : { error: r.message };
+      }}
+    >
+      <div className="grid grid-cols-[1fr_auto] gap-3">
+        <label className="block">
+          <span className={fieldLabel}>Gym name</span>
+          <input className={inputCls} placeholder="e.g. Heritage HS" value={name} onChange={(e) => setName(e.target.value)} />
+        </label>
+        <label className="block">
+          <span className={fieldLabel}>Courts</span>
+          <select className={inputCls} value={courts.length} onChange={(e) => setCount(Number(e.target.value))}>
+            {[1, 2, 3, 4, 5, 6].map((n) => (
+              <option key={n}>{n}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <div className="space-y-2">
+        <span className={fieldLabel}>Court names</span>
+        {courts.map((c, i) => (
+          <input
+            key={i}
+            className={inputCls}
+            value={c}
+            aria-label={`Court ${i + 1} name`}
+            onChange={(e) => setCourts(courts.map((x, j) => (j === i ? e.target.value : x)))}
+          />
+        ))}
+      </div>
+    </ToolDialog>
+  );
+}
+
+export function AddSlotsButton({ gyms }: { gyms: GymWithCourts[] }) {
+  const [gymId, setGymId] = useState(gyms[0]?.id ?? "");
+  const [courtId, setCourtId] = useState("all");
+  const [from, setFrom] = useState(todayIso());
+  const [to, setTo] = useState("");
+  const [days, setDays] = useState<number[]>([]);
+  const [hours, setHours] = useState<number[]>([]);
+  const gym = gyms.find((g) => g.id === gymId);
+  const toggle = (list: number[], v: number) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
+  return (
+    <ToolDialog
+      label="+ Add slots"
+      title="Add practice slots"
+      submitLabel="Add slots"
+      canSubmit={!!gymId && !!from && !!to && days.length > 0 && hours.length > 0}
+      onOpen={() => setFrom((f) => f || todayIso())}
+      onSubmit={async () => {
+        const r = await addSlots({ gymId, courtId, from, to, days, hours });
+        if (!r.ok) return { error: r.message };
+        const parts = [`${r.added} slot${r.added === 1 ? "" : "s"} added`];
+        if (r.skipped) parts.push(`${r.skipped} already existed`);
+        if (r.blocked) parts.push(`${r.blocked} added as blocked (blackout dates)`);
+        return { done: parts.join(" · ") + "." };
+      }}
+    >
+      <div className="grid grid-cols-2 gap-3">
+        <label className="block">
+          <span className={fieldLabel}>Gym</span>
+          <GymSelect
+            gyms={gyms.filter((g) => g.active)}
+            value={gymId}
+            onChange={(v) => {
+              setGymId(v);
+              setCourtId("all");
+            }}
+          />
+        </label>
+        <label className="block">
+          <span className={fieldLabel}>Court</span>
+          <select className={inputCls} value={courtId} onChange={(e) => setCourtId(e.target.value)}>
+            <option value="all">All courts</option>
+            {gym?.courts
+              .filter((c) => c.active)
+              .map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+          </select>
+        </label>
+      </div>
+      <DateRange from={from} to={to} setFrom={setFrom} setTo={setTo} />
+      <div>
+        <span className={fieldLabel}>Days</span>
+        <div className="grid grid-cols-7 gap-1.5">
+          {DAYS.map(([d, l]) => (
+            <button
+              key={d}
+              type="button"
+              aria-pressed={days.includes(d)}
+              className={`${pillCls(days.includes(d))} px-0`}
+              onClick={() => setDays(toggle(days, d))}
+            >
+              {l}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div>
+        <span className={fieldLabel}>Start times</span>
+        <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-7">
+          {HOURS.map((h) => (
+            <button
+              key={h}
+              type="button"
+              aria-pressed={hours.includes(h)}
+              className={`${pillCls(hours.includes(h))} px-0`}
+              onClick={() => setHours(toggle(hours, h))}
+            >
+              {hourLabel(h)}
+            </button>
+          ))}
+        </div>
+      </div>
+      <p className="text-xs text-zinc-500">
+        Each slot is 60 minutes. Slots that already exist are skipped. Blacked-out dates are added as blocked.
+      </p>
+    </ToolDialog>
+  );
+}
+
+export function BlackoutButton({ gyms }: { gyms: GymWithCourts[] }) {
+  const [mode, setMode] = useState<"block" | "restore">("block");
+  const [gymId, setGymId] = useState("all");
+  const [from, setFrom] = useState(todayIso());
+  const [to, setTo] = useState(todayIso());
+  const [hour, setHour] = useState<string>("all");
+  const [reason, setReason] = useState("");
+  const [confirm, confirmDialog] = useConfirm();
+  return (
+    <>
+      {confirmDialog}
+      <ToolDialog
+        label="Blackout dates"
+        title="Blackout dates"
+        tone={mode === "block" ? "red" : "blue"}
+        submitLabel={mode === "block" ? "Block dates" : "Restore dates"}
+        canSubmit={!!from && !!to}
+        beforeSubmit={async () =>
+          mode !== "block" ||
+          confirm({
+            title: "Block these dates?",
+            message: (
+              <p>
+                Every slot in this range becomes unavailable.{" "}
+                <strong className="font-semibold text-red-600 dark:text-red-400">Any team bookings in the range are removed.</strong>
+              </p>
+            ),
+            confirmLabel: "Block dates",
+          })
+        }
+        onSubmit={async () => {
+          const r = await blackoutDates({ mode, gymId, from, to, hour: hour === "all" ? "all" : Number(hour), reason });
+          if (!r.ok) return { error: r.message };
+          if (mode === "restore") return { done: `${r.slots} slot${r.slots === 1 ? "" : "s"} reopened.` };
+          const teams = [...new Set(r.removed.map((x) => x.team))];
+          return {
+            done: `${r.slots} slot${r.slots === 1 ? "" : "s"} blocked.${r.removed.length ? ` Removed ${r.removed.length} booking${r.removed.length === 1 ? "" : "s"} (${teams.join(", ")}).` : ""}`,
+          };
+        }}
+      >
+        <div className="flex gap-2">
+          <button type="button" className={pillCls(mode === "block")} onClick={() => setMode("block")}>
+            Block these dates
+          </button>
+          <button type="button" className={pillCls(mode === "restore")} onClick={() => setMode("restore")}>
+            Restore (undo)
+          </button>
+        </div>
+        <label className="block">
+          <span className={fieldLabel}>Gym</span>
+          <GymSelect gyms={gyms} value={gymId} onChange={setGymId} allLabel="All gyms" />
+        </label>
+        <DateRange
+          from={from}
+          to={to}
+          setFrom={(v) => {
+            setFrom(v);
+            if (!to || to < v) setTo(v);
+          }}
+          setTo={setTo}
+        />
+        <label className="block">
+          <span className={fieldLabel}>Time</span>
+          <select className={inputCls} value={hour} onChange={(e) => setHour(e.target.value)}>
+            <option value="all">All day</option>
+            {HOURS.map((h) => (
+              <option key={h} value={h}>
+                {hourLabel(h)}
+              </option>
+            ))}
+          </select>
+        </label>
+        {mode === "block" && (
+          <>
+            <label className="block">
+              <span className={fieldLabel}>Reason (optional)</span>
+              <input
+                className={inputCls}
+                placeholder="e.g. Thanksgiving, gym closed"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+              />
+            </label>
+            <p className="text-sm font-medium text-red-600 dark:text-red-400">Blocking removes any team bookings in that range.</p>
+          </>
+        )}
+      </ToolDialog>
+    </>
+  );
+}

@@ -30,7 +30,8 @@ describe("practice import", () => {
 
   it("imports courts, slots, bookings and blackouts (with the holiday note)", async () => {
     const r = await importPractice(db.pool, parsePracticeTabs({ gyms, slots: tabs, blackouts }), opts);
-    expect(r).toMatchObject({ gyms: 2, courts: 3, slotsNew: 4, booked: { "4G Epps": 1 }, blackouts: 2, unknownTeams: [] });
+    expect(r).toMatchObject({ gyms: 2, courts: 3, slotsNew: 4, booked: { "4G Epps": 1 }, blackouts: 2, blackoutDates: 1, unknownTeams: [] });
+    expect((await db.pool.query("select day::text, gym_id, minute_of_day, reason from blackouts")).rows).toEqual([{ day: "2026-11-26", gym_id: null, minute_of_day: null, reason: "Thanksgiving" }]);
     const s = await db.pool.query(
       `select g.name gym, c.name court, s.starts_at, t.name team, s.blackout, s.note, s.booked_by
        from slots s join courts c on c.id = s.court_id join gyms g on g.id = c.gym_id left join teams t on t.id = s.team_id order by s.starts_at, c.name`,

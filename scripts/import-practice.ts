@@ -34,7 +34,7 @@ try {
   console.log(`  Gyms: ${r.gyms} new · Courts: ${r.courts} new`);
   console.log(`  Slots: ${r.slotsNew} new${r.slotsExisting ? `, ${r.slotsExisting} already in the app (left alone)` : ""}`);
   console.log(`  Bookings: ${Object.entries(r.booked).map(([t, n]) => `${t} ${n}`).join(", ") || "none"}`);
-  console.log(`  Blackouts: ${r.blackouts}`);
+  console.log(`  Blacked-out slots: ${r.blackouts} · Blackout dates: ${r.blackoutDates} new`);
   if (r.unknownTeams.length) console.log(`\nUNKNOWN TEAMS (the real import will stop): ${r.unknownTeams.join(", ")}`);
   list("Warnings", parsed.warnings);
   console.log(dryRun ? "\nDry run: nothing changed." : "\nDone.");
