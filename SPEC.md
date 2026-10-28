@@ -17,8 +17,8 @@ Same features, same rules. This file is the source of truth for behavior.
 
 1. **PIN storage vs. two-way sync.** *Decided (Oct 28, 2026):* two-way sync with MasterAuth runs **only until this app goes live**; then the sync stops and the app is the only source. Existing users are imported from MasterAuth once. All new users are created in the app. Until go-live, PINs follow option (a): the app stores only a hash and writes the plain PIN to the Sheet when it changes, so Scenic City keeps working.
 2. **Who wins when both sides change the same user?** Proposed: most recent change wins, by timestamp, field by field. *Needed before: Phase 2.*
-3. **Weekend slots.** The booking week is Mon–Fri. Do Sat/Sun slots count toward a week, and which one? *Needed before: Phase 5.*
-4. **Director bookings.** Is the Director limited by the team booking limits when booking for a team? Proposed: no. *Needed before: Phase 5.*
+3. **Weekend slots.** *Decided:* there are no weekend slots today; weeks are counted Monday 00:00 to the next Monday (Eastern), so a weekend slot would count with the Mon–Fri before it. Revisit if weekend slots are added.
+4. **Director bookings.** *Decided:* the Director is exempt from team limits (the app warns when a team goes over).
 5. **Evaluation fields.** List the exact fields on an evaluation card (e.g. shooting, defense, notes) and their type (1–5 score, text). *Needed before: Phase 6.*
 6. **Registration eligibility.** Which TeamSnap columns give grade and gender, and how is "eligible for a team's grades" matched (grade only, or grade + gender)? *Needed before: Phase 6.*
 
