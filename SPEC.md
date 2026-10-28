@@ -150,7 +150,7 @@ Example: Team has Thu 6PM. Mon 6PM is within 72h → can add it (N=1). Once Mon 
 
 ## 6. Director tools
 
-- **Users**: list (sorted by last name), add a user (name, cell, email), set roles, approve pending requests. Granting any Thunder role clears ThunderRequest. A Director can't remove their own Director role.
+- **Users**: grouped like the old app (Access Requests, Active Directors, Active Coaches, Other active, Non-active; last two collapsed), each sorted by last name, with each person's team roles shown. **+ Add user** (name, cell, email, Coach/Director; starter PIN 1234). **Edit** (pop-up): name, email (a changed email must be re-verified at next login), Active, Coach, Director; approve as Coach or deny a request. Granting any Thunder role clears ThunderRequest. A Director can't remove their own Director role or deactivate themselves. **Delete** only when the person isn't the viewer, isn't on any team, and isn't used by Scenic City; otherwise deactivate. Who last changed a user is recorded (updated_by). Cell/CoachID can't be edited.
 - **Players**: all registered players grouped by Gender, then Grade, sorted by Last Name, with Interested/Rostered team pills.
 - **Map**: a flowchart page showing how the parts of the system connect.
 - **TeamSnap import**: upload the TeamSnap CSV export.

@@ -22,7 +22,7 @@ async function Users() {
     <>
       <AppHeader user={user} tab="users" context="director" />
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6">
-        <UserList users={await listUsers(user)} />
+        <UserList users={await listUsers(user)} viewer={user} />
       </main>
     </>
   );

@@ -1,10 +1,13 @@
 import { formatCell } from "@/lib/phone";
+import type { SessionUser } from "@/lib/auth/service";
+import { deleteBlocker } from "@/lib/user-admin";
 import type { UserListItem } from "@/lib/users";
+import { AddUserButton, EditUserButton } from "./users/UserEditor";
 import { Chip, EmailLink, GroupCard, PageTitle, PersonRow, PhoneLink, Stats } from "./ui";
 
 // Grouped like the old Thunder User Management: requests, Directors, Coaches, then everyone else (collapsed).
 // Each group stays sorted by last name.
-export default function UserList({ users }: { users: UserListItem[] }) {
+export default function UserList({ users, viewer }: { users: UserListItem[]; viewer: SessionUser }) {
   const active = users.filter((u) => u.active);
   const requests = active.filter((u) => u.request && !u.coach && !u.director && !u.teams.length);
   const directors = active.filter((u) => u.director);
@@ -36,21 +39,25 @@ export default function UserList({ users }: { users: UserListItem[] }) {
           {u.email ? <EmailLink email={u.email} /> : "No email"}
           {u.email && (u.verified ? <span className="text-emerald-600 dark:text-emerald-400"> ✓ verified</span> : " · not verified")}
         </p>
-        {u.teams.length > 0 && (
-          <div className="flex flex-wrap gap-1 pt-1">
+        <div className="flex items-end justify-between gap-2 pt-1">
+          <div className="flex flex-wrap gap-1">
             {u.teams.map((t) => (
               <Chip key={t} tone="orange">
                 {t}
               </Chip>
             ))}
           </div>
-        )}
+          <EditUserButton user={u} isSelf={u.coachId === viewer.coachId} deleteBlocker={deleteBlocker(u, viewer)} />
+        </div>
       </PersonRow>
     ));
 
   return (
     <section>
-      <PageTitle title="Users" subtitle="Everyone who can sign in, grouped by role and sorted by last name" />
+      <div className="flex items-start justify-between gap-3">
+        <PageTitle title="Users" subtitle="Everyone who can sign in, grouped by role and sorted by last name" />
+        <AddUserButton />
+      </div>
       <Stats
         items={[
           { label: "Users", value: users.length },

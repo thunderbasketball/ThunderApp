@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { GRADES, LEVELS } from "@/lib/team-names";
 import type { PersonOption, Role } from "@/lib/teams";
 import { addStaff, removeStaff, updateTeam } from "../actions";
 import { fieldLabel, inputCls, pillCls, primaryBtn } from "../../ui";
+import { Alert, CloseButton, Toast, dialogCls } from "../../client-ui";
 
 const ROLE_CHOICES: { role: Role; label: string }[] = [
   { role: "HeadCoach", label: "Head Coach" },
@@ -13,18 +14,6 @@ const ROLE_CHOICES: { role: Role; label: string }[] = [
   { role: "Manager", label: "Manager" },
   { role: "TeamParent", label: "Team Parent" },
 ];
-
-function Alert({ tone, children }: { tone: "red" | "green"; children: React.ReactNode }) {
-  const cls =
-    tone === "red"
-      ? "bg-red-50 text-red-700 ring-red-600/20 dark:bg-red-500/10 dark:text-red-300"
-      : "bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-300";
-  return (
-    <p role={tone === "red" ? "alert" : "status"} className={`rounded-xl px-4 py-3 text-sm ring-1 ring-inset ${cls}`}>
-      {children}
-    </p>
-  );
-}
 
 export function TeamEditForm({
   teamId,
@@ -214,11 +203,7 @@ export function AddStaffButton({
         + Add staff
       </button>
       {done && <Toast key={done} message={done} />}
-      <dialog
-        ref={dialog}
-        className="m-auto max-h-[90dvh] w-[calc(100%-2rem)] max-w-lg overflow-y-auto rounded-2xl bg-white p-0 text-zinc-900 shadow-xl backdrop:bg-zinc-950/40 backdrop:backdrop-blur-sm dark:bg-zinc-900 dark:text-zinc-100"
-        onClick={(e) => e.target === dialog.current && close()}
-      >
+      <dialog ref={dialog} className={dialogCls} onClick={(e) => e.target === dialog.current && close()}>
         <form
           className="space-y-5 p-5"
           onSubmit={(e) => {
@@ -243,16 +228,7 @@ export function AddStaffButton({
         >
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold">Add staff</h2>
-            <button
-              type="button"
-              onClick={close}
-              aria-label="Close"
-              className="-mr-2 rounded-full p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800"
-            >
-              <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden className="size-5">
-                <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
-              </svg>
-            </button>
+            <CloseButton onClick={close} />
           </div>
           <div>
             <span className={fieldLabel}>Role</span>
@@ -331,23 +307,5 @@ export function AddStaffButton({
         </form>
       </dialog>
     </>
-  );
-}
-
-// A short confirmation at the bottom of the screen; fades out after 5 seconds.
-function Toast({ message }: { message: string }) {
-  const [shown, setShown] = useState(true);
-  useEffect(() => {
-    const t = setTimeout(() => setShown(false), 5000);
-    return () => clearTimeout(t);
-  }, []);
-  if (!shown) return null;
-  return (
-    <p
-      role="status"
-      className="fixed inset-x-4 bottom-4 z-20 mx-auto max-w-md rounded-xl bg-zinc-900 px-4 py-3 text-sm text-white shadow-lg dark:bg-white dark:text-zinc-900"
-    >
-      {message}
-    </p>
   );
 }
