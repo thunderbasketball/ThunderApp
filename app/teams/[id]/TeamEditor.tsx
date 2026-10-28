@@ -6,7 +6,7 @@ import { GRADES, LEVELS } from "@/lib/team-names";
 import type { PersonOption, Role } from "@/lib/teams";
 import { addStaff, removeStaff, updateTeam } from "../actions";
 import { fieldLabel, inputCls, pillCls, primaryBtn } from "../../ui";
-import { Alert, CloseButton, Toast, dialogCls } from "../../client-ui";
+import { Alert, CloseButton, Toast, dialogCls, useConfirm } from "../../client-ui";
 
 const ROLE_CHOICES: { role: Role; label: string }[] = [
   { role: "HeadCoach", label: "Head Coach" },
@@ -124,23 +124,35 @@ export function TeamEditForm({
 export function RemoveStaffButton({ teamId, coachId, role, label }: { teamId: string; coachId: string; role: Role; label: string }) {
   const router = useRouter();
   const [busy, start] = useTransition();
+  const [confirm, confirmDialog] = useConfirm();
+  const [error, setError] = useState<string | null>(null);
+  const roleName = ROLE_CHOICES.find((r) => r.role === role)?.label;
   return (
-    <button
-      type="button"
-      disabled={busy}
-      className="rounded-full px-3 py-1 text-xs font-medium text-red-600 ring-1 ring-red-600/20 hover:bg-red-50 disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-500/10"
-      onClick={() => {
-        const roleName = ROLE_CHOICES.find((r) => r.role === role)?.label;
-        if (!confirm(`Remove ${label} as ${roleName}?`)) return;
-        start(async () => {
-          const r = await removeStaff(teamId, { coachId, role });
-          if (!r.ok) alert(r.message);
-          router.refresh();
-        });
-      }}
-    >
-      {busy ? "Removing…" : "Remove"}
-    </button>
+    <>
+      <button
+        type="button"
+        disabled={busy}
+        className="rounded-full px-3 py-1 text-xs font-medium text-red-600 ring-1 ring-red-600/20 hover:bg-red-50 disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-500/10"
+        onClick={async () => {
+          const ok = await confirm({
+            title: `Remove ${label}?`,
+            message: <p>They&apos;ll no longer be {roleName} on this team. You can add them back later.</p>,
+            confirmLabel: "Remove",
+          });
+          if (!ok) return;
+          setError(null);
+          start(async () => {
+            const r = await removeStaff(teamId, { coachId, role });
+            if (!r.ok) setError(r.message);
+            router.refresh();
+          });
+        }}
+      >
+        {busy ? "Removing…" : "Remove"}
+      </button>
+      {confirmDialog}
+      {error && <Toast key={error} message={error} />}
+    </>
   );
 }
 
@@ -178,6 +190,7 @@ export function AddStaffButton({
   const [busy, start] = useTransition();
   const dialog = useRef<HTMLDialogElement>(null);
   const close = () => dialog.current?.close();
+  const [confirm, confirmDialog] = useConfirm();
 
   const matches = (v: PersonOption) => v.gender === gender && grades.includes(v.grade ?? "");
   const option = (o: PersonOption) => (
@@ -203,14 +216,25 @@ export function AddStaffButton({
         + Add staff
       </button>
       {done && <Toast key={done} message={done} />}
+      {confirmDialog}
       <dialog ref={dialog} className={dialogCls} onClick={(e) => e.target === dialog.current && close()}>
         <form
           className="space-y-5 p-5"
-          onSubmit={(e) => {
+          onSubmit={async (e) => {
             e.preventDefault();
             setError(null);
             setDone(null);
-            if (role === "HeadCoach" && hasHead && !confirm("This replaces the current head coach and renames the team. Continue?")) return;
+            if (
+              role === "HeadCoach" &&
+              hasHead &&
+              !(await confirm({
+                title: "Replace the head coach?",
+                message: <p>The current head coach comes off this team, and the team is renamed after the new one.</p>,
+                confirmLabel: "Replace head coach",
+                tone: "warning",
+              }))
+            )
+              return;
             start(async () => {
               const r = await addStaff(teamId, { role, person: person === NEW ? p : person });
               if (!r.ok) return setError(r.message);

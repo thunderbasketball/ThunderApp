@@ -4,7 +4,7 @@ import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { UserListItem } from "@/lib/users";
 import { addUser, deleteUser, denyRequest, updateUser } from "./actions";
-import { Alert, CloseButton, Toast, dialogCls } from "../client-ui";
+import { Alert, CloseButton, Toast, dialogCls, useConfirm } from "../client-ui";
 import { fieldLabel, inputCls, primaryBtn } from "../ui";
 
 // An on/off switch row: label on the left, toggle on the right.
@@ -40,6 +40,7 @@ export function EditUserButton({ user, isSelf, deleteBlocker }: { user: UserList
   const [done, setDone] = useState<string | null>(null);
   const [busy, start] = useTransition();
   const pending = user.request && !user.coach && !user.director;
+  const [confirm, confirmDialog] = useConfirm();
 
   const finish = (message: string) => {
     close();
@@ -68,6 +69,7 @@ export function EditUserButton({ user, isSelf, deleteBlocker }: { user: UserList
         Edit
       </button>
       {done && <Toast key={done} message={done} />}
+      {confirmDialog}
       <dialog ref={dialog} className={dialogCls} onClick={(e) => e.target === dialog.current && close()}>
         <form
           className="space-y-4 p-5"
@@ -159,9 +161,21 @@ export function EditUserButton({ user, isSelf, deleteBlocker }: { user: UserList
                 type="button"
                 disabled={busy}
                 className="text-sm font-medium text-red-600 hover:underline dark:text-red-400"
-                onClick={() => {
-                  if (!confirm(`Delete ${user.firstName} ${user.lastName}? This can't be undone. (Deactivating keeps their record.)`)) return;
-                  act(() => deleteUser(user.coachId), `${user.firstName} ${user.lastName} deleted.`);
+                onClick={async () => {
+                  const ok = await confirm({
+                    title: `Delete ${user.firstName} ${user.lastName}?`,
+                    message: (
+                      <>
+                        <p>
+                          This permanently removes their login.{" "}
+                          <strong className="font-semibold text-red-600 dark:text-red-400">It can&apos;t be undone.</strong>
+                        </p>
+                        <p className="mt-2">To keep their record, turn off Active instead.</p>
+                      </>
+                    ),
+                    confirmLabel: "Delete permanently",
+                  });
+                  if (ok) act(() => deleteUser(user.coachId), `${user.firstName} ${user.lastName} deleted.`);
                 }}
               >
                 Delete user

@@ -1,6 +1,6 @@
 "use client";
 // Small client-side pieces shared by the pop-up forms.
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 export const dialogCls =
   "m-auto max-h-[90dvh] w-[calc(100%-2rem)] max-w-lg overflow-y-auto rounded-2xl bg-white p-0 text-zinc-900 shadow-xl backdrop:bg-zinc-950/40 backdrop:backdrop-blur-sm dark:bg-zinc-900 dark:text-zinc-100";
@@ -48,4 +48,72 @@ export function Toast({ message }: { message: string }) {
       {message}
     </p>
   );
+}
+
+type ConfirmOptions = { title: string; message: ReactNode; confirmLabel: string; tone?: "danger" | "warning" };
+
+// An in-app "are you sure?" box in place of the browser's confirm().
+// Usage: const [confirm, confirmDialog] = useConfirm(); ... if (await confirm({...})) ...; render {confirmDialog}.
+export function useConfirm(): [(o: ConfirmOptions) => Promise<boolean>, ReactNode] {
+  const ref = useRef<HTMLDialogElement>(null);
+  const resolve = useRef<((ok: boolean) => void) | null>(null);
+  const [opts, setOpts] = useState<ConfirmOptions | null>(null);
+
+  const ask = (o: ConfirmOptions) =>
+    new Promise<boolean>((res) => {
+      resolve.current = res;
+      setOpts(o);
+      requestAnimationFrame(() => ref.current?.showModal());
+    });
+  const answer = (ok: boolean) => {
+    resolve.current?.(ok);
+    resolve.current = null;
+    ref.current?.close();
+  };
+
+  const danger = (opts?.tone ?? "danger") === "danger";
+  const element = (
+    <dialog
+      ref={ref}
+      className={`${dialogCls} max-w-sm`}
+      onClose={() => answer(false)}
+      onClick={(e) => e.target === e.currentTarget && answer(false)}
+    >
+      {opts && (
+        <div className="p-6 text-center">
+          <span
+            className={`mx-auto flex size-12 items-center justify-center rounded-full ${
+              danger ? "bg-red-100 text-red-600 dark:bg-red-500/15 dark:text-red-400" : "bg-amber-100 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400"
+            }`}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden className="size-6">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m0 3.75h.008M10.34 3.94 1.82 18.7A1.88 1.88 0 0 0 3.45 21.5h17.1a1.88 1.88 0 0 0 1.63-2.8L13.66 3.94a1.88 1.88 0 0 0-3.32 0Z" />
+            </svg>
+          </span>
+          <h2 className="mt-4 text-lg font-semibold">{opts.title}</h2>
+          <div className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{opts.message}</div>
+          <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row">
+            <button
+              type="button"
+              autoFocus
+              onClick={() => answer(false)}
+              className="flex-1 rounded-xl px-4 py-3 text-sm font-semibold text-zinc-700 ring-1 ring-zinc-950/10 hover:bg-zinc-50 dark:text-zinc-200 dark:ring-white/15 dark:hover:bg-zinc-800"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => answer(true)}
+              className={`flex-1 rounded-xl px-4 py-3 text-sm font-semibold text-white shadow-sm ${
+                danger ? "bg-red-600 hover:bg-red-700" : "bg-amber-600 hover:bg-amber-700"
+              }`}
+            >
+              {opts.confirmLabel}
+            </button>
+          </div>
+        </div>
+      )}
+    </dialog>
+  );
+  return [ask, element];
 }
