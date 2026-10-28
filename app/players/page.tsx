@@ -13,6 +13,10 @@ export default function PlayersPage() {
   );
 }
 
+// Thunder is in Eastern time, wherever the server runs.
+const when = (d: Date) =>
+  d.toLocaleString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+
 const gradeLabel = (g: string) => (g === "K" ? "Kindergarten" : `${g}${["", "st", "nd", "rd"][Number(g)] ?? "th"} grade`);
 
 async function Players() {
@@ -20,7 +24,7 @@ async function Players() {
   if (!user) redirect(devBypass ? "/dev-login" : "/login");
   if (!user.isDirector) redirect("/");
 
-  const { groups, importedAt, importedBy } = await listPlayerGroups(user);
+  const { groups, importedAt, importedBy, sync } = await listPlayerGroups(user);
   const total = groups.reduce((n, g) => n + g.players.length, 0);
 
   return (
@@ -31,7 +35,13 @@ async function Players() {
           <h2 className="text-lg font-semibold">Registered players ({total})</h2>
           {importedAt && (
             <p className="text-sm text-zinc-500">
-              From TeamSnap, imported {importedAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} by {importedBy}
+              From TeamSnap, updated {when(importedAt)} by {importedBy}
+              {sync?.checkedAt && sync.ok && <> · sheet checked {when(sync.checkedAt)}</>}
+            </p>
+          )}
+          {sync && !sync.ok && (
+            <p className="mt-2 rounded-md bg-red-50 px-3 py-2 text-sm text-red-800 dark:bg-red-950 dark:text-red-200">
+              Couldn&apos;t update from the Google Sheet{sync.checkedAt && <> ({when(sync.checkedAt)})</>}: {sync.message}
             </p>
           )}
         </div>
