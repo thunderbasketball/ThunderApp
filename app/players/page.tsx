@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { currentUser, devBypass } from "@/lib/auth/server";
 import { listPlayerGroups } from "@/lib/players";
 import { formatCell } from "@/lib/phone";
+import { gradeLabel } from "@/lib/grades";
 import AppHeader from "../AppHeader";
 
 export default function PlayersPage() {
@@ -16,8 +17,6 @@ export default function PlayersPage() {
 // Thunder is in Eastern time, wherever the server runs.
 const when = (d: Date) =>
   d.toLocaleString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-
-const gradeLabel = (g: string) => (g === "K" ? "Kindergarten" : `${g}${["", "st", "nd", "rd"][Number(g)] ?? "th"} grade`);
 
 async function Players() {
   const user = await currentUser();

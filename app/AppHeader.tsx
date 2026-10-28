@@ -3,11 +3,12 @@ import type { SessionUser } from "@/lib/auth/service";
 import { LogoutButton } from "./HomeActions";
 
 // Sticky top bar: name, role chips, and Director tabs. (Full role/team switching comes in Phase 3.)
-export default function AppHeader({ user, tab }: { user: SessionUser; tab?: "users" | "players" }) {
+export default function AppHeader({ user, tab }: { user: SessionUser; tab?: "users" | "players" | "coaches" }) {
   const roles = [user.isDirector && "Director", user.isCoach && "Coach"].filter(Boolean) as string[];
   const tabs = [
     { key: "users", href: "/", label: "Users" },
     { key: "players", href: "/players", label: "Players" },
+    { key: "coaches", href: "/coaches", label: "Coaches" },
   ];
   return (
     <header className="sticky top-0 z-10 border-b border-zinc-200 bg-white/95 backdrop-blur dark:border-zinc-800 dark:bg-black/95">
