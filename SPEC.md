@@ -10,16 +10,12 @@ Same features, same rules. This file is the source of truth for behavior.
 | Stack | Next.js (App Router, TypeScript) + Supabase (Postgres) |
 | Hosting | Local development for now (Mac). Hosting decided later (Vercel was the candidate). |
 | Email | Resend, sending from the thunderbball.org domain |
-| MasterAuth Sheet | Two-way sync with the existing MasterAuth Google Sheet (Scenic City also uses it) |
+| MasterAuth Sheet | Import existing users once. Two-way sync until go-live (Scenic City also uses it), then the app is the only source |
 | Migration | Migrate everything: users, teams + staff, gyms/courts/slots/bookings/blackouts, evaluations, Interested marks, rosters, registrations |
 
 ## Open questions (decide before the phase that needs them)
 
-1. **PIN storage vs. two-way sync.** The spec says hash PINs once we leave Sheets, but Scenic City reads plain-text PINs from MasterAuth. Both can't be true at once. Options:
-   - (a) Keep plain-text PINs in the Sheet for Scenic City. The app stores only a hash and writes the plain PIN to the Sheet when it changes. (The Sheet stays the weak point.)
-   - (b) Change Scenic City to check a hash too, so the Sheet only holds hashes.
-   - (c) Make the Sheet the only place PINs live; the app checks PINs against the Sheet.
-   *Needed before: Phase 2.*
+1. **PIN storage vs. two-way sync.** *Decided (Oct 28, 2026):* two-way sync with MasterAuth runs **only until this app goes live**; then the sync stops and the app is the only source. Existing users are imported from MasterAuth once. All new users are created in the app. Until go-live, PINs follow option (a): the app stores only a hash and writes the plain PIN to the Sheet when it changes, so Scenic City keeps working.
 2. **Who wins when both sides change the same user?** Proposed: most recent change wins, by timestamp, field by field. *Needed before: Phase 2.*
 3. **Weekend slots.** The booking week is Mon–Fri. Do Sat/Sun slots count toward a week, and which one? *Needed before: Phase 5.*
 4. **Director bookings.** Is the Director limited by the team booking limits when booking for a team? Proposed: no. *Needed before: Phase 5.*
