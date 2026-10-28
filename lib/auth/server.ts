@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { connection } from "next/server";
 import { db } from "../db";
 import { sendEmail } from "../email";
-import { getSessionUser, type Deps, type SessionUser } from "./service";
+import { getSessionUser, setActingAs as actAs, type Deps, type SessionUser } from "./service";
 
 export const SESSION_COOKIE = "thunder_session";
 
@@ -42,4 +42,12 @@ export async function currentUser(): Promise<SessionUser | null> {
   // Always check at request time; never let Next.js pre-build a page with someone's login in it.
   await connection();
   return getSessionUser(deps, await sessionToken());
+}
+
+// Shown when a Director tries to save something while viewing the app as someone else.
+export const VIEW_ONLY = "You're viewing the app as someone else, so nothing can be changed. Tap Stop at the top first.";
+
+// Director "Act as": view the app as another user (view only), or stop. Checked again on the server.
+export async function setActingAs(coachId: string | null) {
+  return actAs(deps, await sessionToken(), coachId);
 }

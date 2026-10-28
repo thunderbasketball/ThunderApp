@@ -342,12 +342,24 @@ describe("PIN only (until go-live)", () => {
   });
 
   it("Create Account (a number not in the users list) still verifies the email with a code", async () => {
-    const s = await auth.startSignup(deps, { cell: CELL, firstName: "Earl", lastName: "Epps", email: "e@example.com", pin1: "2468", pin2: "2468" });
+    const s = await auth.startSignup(deps, {
+      cell: CELL,
+      firstName: "Earl",
+      lastName: "Epps",
+      email: "e@example.com",
+      pin1: "2468",
+      pin2: "2468",
+    });
     expect(s).toEqual({ step: "signupCode", maskedEmail: "e***@example.com" });
     expect(mail.sent[0].to).toBe("e@example.com");
     expect(await userRow()).toBeUndefined();
     expect(await auth.completeSignup(deps, CELL, mail.lastCode())).toEqual({ step: "done", message: MSG.requested });
-    expect(await userRow()).toMatchObject({ thunder_request: true, thunder_director: false, email: "e@example.com", verified_email: "e@example.com" });
+    expect(await userRow()).toMatchObject({
+      thunder_request: true,
+      thunder_director: false,
+      email: "e@example.com",
+      verified_email: "e@example.com",
+    });
   });
 
   it("Forgot PIN says to ask the Director", async () => {
@@ -465,7 +477,10 @@ describe("team staff", () => {
     const team = await db.pool.query<{ id: string }>(
       "insert into teams (name, gender, grades, grade_sort, level, created_by) values ('4G Test', 'Girls', '{4}', 4, 'REC', 'x') returning id",
     );
-    await db.pool.query("insert into team_staff (team_id, coach_id, role, added_by) values ($1, $2, 'TeamParent', 'x')", [team.rows[0].id, CELL.slice(-7)]);
+    await db.pool.query("insert into team_staff (team_id, coach_id, role, added_by) values ($1, $2, 'TeamParent', 'x')", [
+      team.rows[0].id,
+      CELL.slice(-7),
+    ]);
     expect(await auth.lookupPhone(deps, CELL)).toEqual({ step: "pin" });
     const t = token(await auth.submitPin(deps, CELL, "5678"));
     expect(await auth.getSessionUser(deps, t)).toMatchObject({ hasThunderRole: true, requestPending: false, isCoach: false });
@@ -497,6 +512,42 @@ describe("sessions", () => {
     const t = token(await auth.submitPin(deps, CELL, "5678"));
     await db.pool.query("update users set active = false");
     expect(await auth.getSessionUser(deps, t)).toBeNull();
+  });
+
+  it("act as: a Director views as someone else (re-checked every request); Stop or losing Director ends it", async () => {
+    await addUser({ director: true });
+    await addUser({ cell: "4235550002", email: "pat@example.com", coach: true });
+    const t = token(await auth.submitPin(deps, CELL, "5678"));
+    expect(await auth.setActingAs(deps, t, "5550002")).toEqual({ ok: true });
+    expect(await auth.getSessionUser(deps, t)).toMatchObject({
+      coachId: "5550002",
+      isDirector: false,
+      actingBy: { coachId: "5551234", name: "Earl Epps" },
+    });
+
+    // Losing the Director role ends it at once; getting it back resumes.
+    await db.pool.query("update users set thunder_director = false where coach_id = '5551234'");
+    expect(await auth.getSessionUser(deps, t)).toMatchObject({ coachId: "5551234" });
+    expect((await auth.getSessionUser(deps, t))?.actingBy).toBeUndefined();
+    await db.pool.query("update users set thunder_director = true where coach_id = '5551234'");
+
+    // The other person deactivated: back to yourself.
+    await db.pool.query("update users set active = false where coach_id = '5550002'");
+    expect(await auth.getSessionUser(deps, t)).toMatchObject({ coachId: "5551234" });
+    await db.pool.query("update users set active = true where coach_id = '5550002'");
+
+    expect(await auth.setActingAs(deps, t, null)).toEqual({ ok: true });
+    expect(await auth.getSessionUser(deps, t)).toMatchObject({ coachId: "5551234", isDirector: true });
+    expect(await auth.setActingAs(deps, t, "5551234")).toEqual({ ok: false, message: "Pick someone else." });
+    expect(await auth.setActingAs(deps, t, "9999999")).toEqual({ ok: false, message: "Only active users can be viewed." });
+  });
+
+  it("act as: only a Director can start it", async () => {
+    await addUser({});
+    await addUser({ cell: "4235550002", email: "pat@example.com" });
+    const t = token(await auth.submitPin(deps, CELL, "5678"));
+    expect(await auth.setActingAs(deps, t, "5550002")).toEqual({ ok: false, message: "Only the Director can act as someone else." });
+    expect(await auth.setActingAs(deps, "junk", "5550002")).toEqual({ ok: false, message: "Please log in again." });
   });
 
   it("logout deletes the session; junk tokens get nothing", async () => {

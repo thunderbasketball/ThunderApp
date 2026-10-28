@@ -77,6 +77,7 @@ Same features, same rules. This file is the source of truth for behavior.
 - The server keeps the session (device ID + login time) for 24 hours from the PIN login. Opening the app on the same device within that time logs straight in; after it, the PIN is asked again.
 - **Roles are re-read from the user record on every request.** Removing a role, or deactivating a user, takes effect on the next click.
 - Logout deletes the session on the server and the device ID cookie, so the next visit needs the PIN.
+- **Act as** (Director): **👁 View the app as …** in a user's Edit pop-up shows the whole app as that person sees it (their roles, teams, inbox), **view only**: every save is refused ("You're viewing the app as someone else…"), and opening their inbox doesn't mark anything read. An orange bar at the top shows who you're viewing as, with **Stop** (back to Users). Stored on the session and re-checked every request: it ends if you lose the Director role or they're deactivated; logout ends it.
 
 ## 2. Roles
 

@@ -3,12 +3,25 @@
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { UserListItem } from "@/lib/users";
+import { actAs } from "../act-as/actions";
 import { addUser, deleteUser, denyRequest, resetLogin, updateUser } from "./actions";
 import { Alert, CloseButton, Toast, dialogCls, useConfirm } from "../client-ui";
 import { fieldLabel, inputCls, primaryBtn } from "../ui";
 
 // An on/off switch row: label on the left, toggle on the right.
-function Toggle({ label, hint, on, disabled, onChange }: { label: string; hint?: string; on: boolean; disabled?: boolean; onChange: (v: boolean) => void }) {
+function Toggle({
+  label,
+  hint,
+  on,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  hint?: string;
+  on: boolean;
+  disabled?: boolean;
+  onChange: (v: boolean) => void;
+}) {
   return (
     <label className={`flex items-center justify-between gap-3 py-2 ${disabled ? "opacity-50" : ""}`}>
       <span>
@@ -34,7 +47,14 @@ export function EditUserButton({ user, isSelf, deleteBlocker }: { user: UserList
   const router = useRouter();
   const dialog = useRef<HTMLDialogElement>(null);
   const close = () => dialog.current?.close();
-  const initial = { first: user.firstName, last: user.lastName, email: user.email ?? "", active: user.active, coach: user.coach, director: user.director };
+  const initial = {
+    first: user.firstName,
+    last: user.lastName,
+    email: user.email ?? "",
+    active: user.active,
+    coach: user.coach,
+    director: user.director,
+  };
   const [f, setF] = useState(initial);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
@@ -145,7 +165,9 @@ export function EditUserButton({ user, isSelf, deleteBlocker }: { user: UserList
               onChange={(v) => setF({ ...f, director: v })}
             />
           </div>
-          {user.teams.length > 0 && <p className="text-xs text-zinc-500">On teams: {user.teams.join(", ")}. Team roles are changed on each team&apos;s page.</p>}
+          {user.teams.length > 0 && (
+            <p className="text-xs text-zinc-500">On teams: {user.teams.join(", ")}. Team roles are changed on each team&apos;s page.</p>
+          )}
           {user.updatedBy && <p className="text-xs text-zinc-400">Last changed by {user.updatedBy}</p>}
 
           {error && <Alert tone="red">{error}</Alert>}
@@ -154,6 +176,24 @@ export function EditUserButton({ user, isSelf, deleteBlocker }: { user: UserList
           </button>
 
           <div className="space-y-3 border-t border-zinc-100 pt-4 dark:border-white/5">
+            {!isSelf && user.active && (
+              <div>
+                <button
+                  type="button"
+                  disabled={busy}
+                  className="text-sm font-medium text-thunder-blue hover:underline dark:text-blue-400"
+                  onClick={() =>
+                    start(async () => {
+                      setError(null);
+                      const r = await actAs(user.coachId);
+                      if (r && !r.ok) setError(r.message);
+                    })
+                  }
+                >
+                  👁 View the app as {user.firstName} (view only)
+                </button>
+              </div>
+            )}
             {!isSelf && (
               <div>
                 <button
@@ -166,8 +206,8 @@ export function EditUserButton({ user, isSelf, deleteBlocker }: { user: UserList
                       message: (
                         <>
                           <p>
-                            Their PIN goes back to <strong className="font-semibold">1234</strong>, their email is cleared, and they&apos;re logged out
-                            everywhere.
+                            Their PIN goes back to <strong className="font-semibold">1234</strong>, their email is cleared, and they&apos;re
+                            logged out everywhere.
                           </p>
                           <p className="mt-2">At their next login they enter an email, confirm it with a code, and choose a new PIN.</p>
                         </>
@@ -272,11 +312,25 @@ export function AddUserButton() {
           </div>
           <label className="block">
             <span className={fieldLabel}>Cell</span>
-            <input className={inputCls} type="tel" inputMode="tel" autoComplete="off" placeholder="(423) 555-1234" value={f.cell} onChange={(e) => setF({ ...f, cell: e.target.value })} />
+            <input
+              className={inputCls}
+              type="tel"
+              inputMode="tel"
+              autoComplete="off"
+              placeholder="(423) 555-1234"
+              value={f.cell}
+              onChange={(e) => setF({ ...f, cell: e.target.value })}
+            />
           </label>
           <label className="block">
             <span className={fieldLabel}>Email (for their login code)</span>
-            <input className={inputCls} type="email" autoComplete="off" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} />
+            <input
+              className={inputCls}
+              type="email"
+              autoComplete="off"
+              value={f.email}
+              onChange={(e) => setF({ ...f, email: e.target.value })}
+            />
           </label>
           <div className="divide-y divide-zinc-100 rounded-xl px-4 ring-1 ring-zinc-950/5 dark:divide-white/5 dark:ring-white/10">
             <Toggle label="Coach" on={f.coach} onChange={(v) => setF({ ...f, coach: v })} />

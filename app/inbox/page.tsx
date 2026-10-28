@@ -31,7 +31,8 @@ async function Inbox({ searchParams }: { searchParams: PageProps<"/inbox">["sear
   const { active } = await currentContexts(user);
   const inbox = sent ? [] : await listInbox(deps, user);
   // Opening the inbox counts as seeing what's in it. Done before the header renders, so its badge is already cleared.
-  await markRead(
+  // Not while a Director is viewing as this person: that would hide their unread ones from them.
+  if (!user.actingBy) await markRead(
     deps,
     user,
     inbox.filter((i) => !i.read).map((i) => i.id),

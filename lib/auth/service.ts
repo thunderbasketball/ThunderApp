@@ -68,6 +68,8 @@ export type SessionUser = {
   isCoach: boolean;
   requestPending: boolean;
   hasThunderRole: boolean;
+  // Set when a Director is viewing the app as this user ("Act as"): who is really logged in. View only.
+  actingBy?: { coachId: string; name: string };
 };
 
 const err = (message: string): Step => ({ step: "error", message });
@@ -79,8 +81,8 @@ export const MSG = {
   requested: "Request pending. The Director will review it.",
   locked: `Too many wrong PINs. Try again in ${LOCKOUT_MINUTES} minutes, or tap "Forgot PIN?".`,
   noVerifiedEmail: "There's no verified email on file. Please contact the Director.",
-  codeExpired: "That code has expired. Tap \"Send a new code\".",
-  codeDead: "Too many wrong tries. Tap \"Send a new code\".",
+  codeExpired: 'That code has expired. Tap "Send a new code".',
+  codeDead: 'Too many wrong tries. Tap "Send a new code".',
   badCode: "Enter the 6-digit code from the email.",
   badPin: "PIN must be 4 digits.",
   pinMismatch: "The two PINs don't match.",
@@ -149,10 +151,11 @@ async function issueCode(
   }
 
   // Only the newest code for a purpose works.
-  await q.query(
-    "update email_codes set expires_at = $3 where cell = $1 and purpose = $2 and used_at is null and expires_at > $3",
-    [cell, purpose, now],
-  );
+  await q.query("update email_codes set expires_at = $3 where cell = $1 and purpose = $2 and used_at is null and expires_at > $3", [
+    cell,
+    purpose,
+    now,
+  ]);
 
   const code = deps.devFixedCode ?? newCode();
   await q.query(
@@ -253,13 +256,49 @@ export async function startSession(deps: Deps, q: PoolClient | Pool, coachId: st
 // Roles come straight from the user record on every call, so a removed role takes effect at once.
 export async function getSessionUser(deps: Deps, token: string | undefined): Promise<SessionUser | null> {
   if (!token) return null;
-  const r = await deps.pool.query<UserRow>(
-    `select u.*, ${ON_TEAM} from sessions s join users u on u.coach_id = s.coach_id
+  const r = await deps.pool.query<UserRow & { acting_as: string | null }>(
+    `select u.*, ${ON_TEAM}, s.acting_as from sessions s join users u on u.coach_id = s.coach_id
      where s.token_hash = $1 and s.expires_at > $2`,
     [sha256(token), deps.now()],
   );
-  const u = r.rows[0];
-  if (!u || !u.active) return null;
+  const real = r.rows[0];
+  if (!real || !real.active) return null;
+  // Act as: only while the real person is still an active Director, and the other person is active.
+  if (real.acting_as && real.thunder_director && real.acting_as !== real.coach_id) {
+    const t = await deps.pool.query<UserRow>(`select u.*, ${ON_TEAM} from users u where u.coach_id = $1 and u.active`, [real.acting_as]);
+    if (t.rows[0])
+      return { ...toSessionUser(t.rows[0]), actingBy: { coachId: real.coach_id, name: `${real.first_name} ${real.last_name}` } };
+  }
+  return toSessionUser(real);
+}
+
+// Director: view the app as another user (view only), or stop.
+export async function setActingAs(
+  deps: Deps,
+  token: string | undefined,
+  coachId: string | null,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  if (!token) return { ok: false, message: "Please log in again." };
+  const s = await deps.pool.query<{ coach_id: string; director: boolean }>(
+    `select s.coach_id, u.thunder_director and u.active as director from sessions s join users u on u.coach_id = s.coach_id
+     where s.token_hash = $1 and s.expires_at > $2`,
+    [sha256(token), deps.now()],
+  );
+  const me = s.rows[0];
+  if (!me) return { ok: false, message: "Please log in again." };
+  if (coachId === null) {
+    await deps.pool.query("update sessions set acting_as = null where token_hash = $1", [sha256(token)]);
+    return { ok: true };
+  }
+  if (!me.director) return { ok: false, message: "Only the Director can act as someone else." };
+  if (!/^\d{7}$/.test(coachId) || coachId === me.coach_id) return { ok: false, message: "Pick someone else." };
+  const t = await deps.pool.query("select 1 from users where coach_id = $1 and active", [coachId]);
+  if (!t.rows[0]) return { ok: false, message: "Only active users can be viewed." };
+  await deps.pool.query("update sessions set acting_as = $2 where token_hash = $1", [sha256(token), coachId]);
+  return { ok: true };
+}
+
+function toSessionUser(u: UserRow): SessionUser {
   return {
     coachId: u.coach_id,
     firstName: u.first_name,
@@ -328,10 +367,12 @@ export async function completeStarter(deps: Deps, cellInput: unknown, code: unkn
     if (!(await isStarterPin(user.pin_hash))) return { step: "pin" };
     const c = await checkCode(deps, q, cell, "starter", code);
     if (!c.ok) return c.step;
-    await q.query(
-      "update users set pin_hash = $2, email = $3, verified_email = $3, updated_at = $4 where coach_id = $1",
-      [user.coach_id, pinHash, c.row.email, deps.now()],
-    );
+    await q.query("update users set pin_hash = $2, email = $3, verified_email = $3, updated_at = $4 where coach_id = $1", [
+      user.coach_id,
+      pinHash,
+      c.row.email,
+      deps.now(),
+    ]);
     await q.query("delete from pin_lockouts where cell = $1", [cell]);
     return startSession(deps, q, user.coach_id);
   });
@@ -510,10 +551,7 @@ export async function requestAccess(deps: Deps, token: string | undefined): Prom
   const user = await getSessionUser(deps, token);
   if (!user) return err("Please log in again.");
   if (!user.hasThunderRole) {
-    await deps.pool.query("update users set thunder_request = true, updated_at = $2 where coach_id = $1", [
-      user.coachId,
-      deps.now(),
-    ]);
+    await deps.pool.query("update users set thunder_request = true, updated_at = $2 where coach_id = $1", [user.coachId, deps.now()]);
   }
   return { step: "done", message: MSG.requested };
 }

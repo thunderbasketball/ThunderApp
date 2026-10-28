@@ -1,6 +1,6 @@
 "use server";
 
-import { currentUser } from "@/lib/auth/server";
+import { VIEW_ONLY, currentUser } from "@/lib/auth/server";
 import { db } from "@/lib/db";
 import * as rosters from "@/lib/rosters";
 import * as teams from "@/lib/teams";
@@ -15,6 +15,7 @@ async function guarded<T extends Result>(
 ): Promise<T | { ok: false; message: string }> {
   const user = await currentUser();
   if (!user) return { ok: false, message: "Please log in again." };
+  if (user.actingBy) return { ok: false, message: VIEW_ONLY };
   try {
     return await fn(user);
   } catch (e) {

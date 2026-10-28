@@ -9,6 +9,7 @@ import { myEventCount } from "@/lib/events";
 import { myPracticesToday } from "@/lib/practice-attendance";
 import { localParts, zonedTime } from "@/lib/time";
 import { syncIfStale } from "@/lib/teamsnap/scheduler";
+import { stopActing } from "./act-as/actions";
 import { LogoutButton } from "./HomeActions";
 import { Avatar } from "./ui";
 
@@ -48,6 +49,19 @@ export default async function AppHeader({ user, tab, context }: { user: SessionU
   return (
     <>
       <header className="sticky top-0 z-10 border-t-[3px] border-t-thunder-orange border-b border-zinc-950/5 bg-white/80 backdrop-blur-xl dark:border-white/10 dark:bg-zinc-950/80">
+        {user.actingBy && (
+          <form
+            action={stopActing}
+            className="flex items-center justify-between gap-3 bg-thunder-orange px-4 py-2 text-sm font-medium text-white"
+          >
+            <span className="min-w-0 truncate">
+              👁 Viewing as {user.firstName} {user.lastName} · view only
+            </span>
+            <button type="submit" className="shrink-0 rounded-full bg-white px-3 py-1 text-xs font-bold text-thunder-orange">
+              Stop
+            </button>
+          </form>
+        )}
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-4 py-3">
           <Link href="/" className="flex items-center gap-2">
             <Image src="/brand/logo-96.png" alt="Thunder Basketball" width={36} height={36} priority className="size-9" />
