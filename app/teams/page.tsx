@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 import { formatCell } from "@/lib/phone";
 import { listTeams, type TeamListItem } from "@/lib/teams";
 import AppHeader from "../AppHeader";
-import { Chip, GroupCard, PageTitle, PhoneLink, Stats } from "../ui";
+import { Chip, GroupCard, PageTitle, Stats } from "../ui";
 
 export default function TeamsPage() {
   return (
@@ -16,8 +16,7 @@ export default function TeamsPage() {
   );
 }
 
-const gradesLabel = (g: string[]) =>
-  g.length === 1 ? (g[0] === "K" ? "Kindergarten" : `Grade ${g[0]}`) : `Grades ${g.join(", ")}`;
+const gradesLabel = (g: string[]) => (g.length === 1 ? (g[0] === "K" ? "Kindergarten" : `Grade ${g[0]}`) : `Grades ${g.join(", ")}`);
 
 async function Teams() {
   const user = await currentUser();
@@ -49,8 +48,16 @@ async function Teams() {
         <Stats
           items={[
             { label: "Teams", value: teams.length },
-            { label: "Boys", value: count("Boys"), tone: "text-blue-600 dark:text-blue-400" },
-            { label: "Girls", value: count("Girls"), tone: "text-pink-600 dark:text-pink-400" },
+            {
+              label: "Boys",
+              value: count("Boys"),
+              tone: "text-blue-600 dark:text-blue-400",
+            },
+            {
+              label: "Girls",
+              value: count("Girls"),
+              tone: "text-pink-600 dark:text-pink-400",
+            },
           ]}
         />
         {!teams.length && <p className="text-zinc-500">No teams yet. Tap “+ New team” to create one.</p>}
@@ -58,33 +65,41 @@ async function Teams() {
           {groups.map((g) => (
             <GroupCard key={g.gender} title={g.gender} count={g.teams.length}>
               {g.teams.map((t) => (
-                <li key={t.id} className="flex gap-3 px-4 py-3">
-                  <span
-                    className={`flex size-10 shrink-0 items-center justify-center rounded-xl text-sm font-bold text-white ${
-                      t.gender === "Boys" ? "bg-thunder-blue" : "bg-pink-600"
-                    }`}
-                  >
-                    {t.name.split(" ")[0]}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="truncate font-semibold">{t.name}</p>
-                      <Chip tone={t.level === "COMP" ? "orange" : "zinc"}>{t.level}</Chip>
+                <li key={t.id}>
+                  <Link href={`/teams/${t.id}`} className="flex gap-3 px-4 py-3 hover:bg-zinc-50 dark:hover:bg-white/5">
+                    <span
+                      className={`flex size-10 shrink-0 items-center justify-center rounded-xl text-sm font-bold text-white ${
+                        t.gender === "Boys" ? "bg-thunder-blue" : "bg-pink-600"
+                      }`}
+                    >
+                      {t.name.split(" ")[0]}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="truncate font-semibold">{t.name}</p>
+                        <Chip tone={t.level === "COMP" ? "orange" : "zinc"}>{t.level}</Chip>
+                      </div>
+                      <div className="mt-0.5 space-y-0.5 text-sm text-zinc-500 dark:text-zinc-400">
+                        <p>{gradesLabel(t.grades)}</p>
+                        {t.headCoach ? (
+                          <p>
+                            Head coach: {t.headCoach.first} {t.headCoach.last} · {formatCell(t.headCoach.cell)}
+                          </p>
+                        ) : (
+                          <p className="text-amber-700 dark:text-amber-400">No head coach yet</p>
+                        )}
+                        {t.practiceLocations.length > 0 && <p>Practices: {t.practiceLocations.join(", ")}</p>}
+                        <p className="text-xs">Created by {t.createdBy}</p>
+                      </div>
                     </div>
-                    <div className="mt-0.5 space-y-0.5 text-sm text-zinc-500 dark:text-zinc-400">
-                      <p>{gradesLabel(t.grades)}</p>
-                      {t.headCoach ? (
-                        <p>
-                          Head coach: {t.headCoach.first} {t.headCoach.last} ·{" "}
-                          <PhoneLink cell={t.headCoach.cell} label={formatCell(t.headCoach.cell)} />
-                        </p>
-                      ) : (
-                        <p className="text-amber-700 dark:text-amber-400">No head coach yet</p>
-                      )}
-                      {t.practiceLocations.length > 0 && <p>Practices: {t.practiceLocations.join(", ")}</p>}
-                      <p className="text-xs">Created by {t.createdBy}</p>
-                    </div>
-                  </div>
+                    <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden className="mt-3 size-5 shrink-0 text-zinc-300">
+                      <path
+                        fillRule="evenodd"
+                        d="M8.22 5.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L11.94 10 8.22 6.28a.75.75 0 0 1 0-1.06Z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </Link>
                 </li>
               ))}
             </GroupCard>

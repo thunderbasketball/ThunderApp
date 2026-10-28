@@ -395,6 +395,23 @@ describe("no Thunder role", () => {
   });
 });
 
+describe("team staff", () => {
+  it("a place on a team's staff counts as a Thunder role", async () => {
+    await addUser({ coach: false, request: true });
+    expect(await auth.lookupPhone(deps, CELL)).toEqual({ step: "done", message: MSG.pending });
+    const team = await db.pool.query<{ id: string }>(
+      "insert into teams (name, gender, grades, grade_sort, level, created_by) values ('4G Test', 'Girls', '{4}', 4, 'REC', 'x') returning id",
+    );
+    await db.pool.query("insert into team_staff (team_id, coach_id, role, added_by) values ($1, $2, 'TeamParent', 'x')", [team.rows[0].id, CELL.slice(-7)]);
+    expect(await auth.lookupPhone(deps, CELL)).toEqual({ step: "pin" });
+    const t = token(await auth.submitPin(deps, CELL, "5678"));
+    expect(await auth.getSessionUser(deps, t)).toMatchObject({ hasThunderRole: true, requestPending: false, isCoach: false });
+    // Taken off the team: access goes on the next request.
+    await db.pool.query("delete from team_staff");
+    expect(await auth.getSessionUser(deps, t)).toMatchObject({ hasThunderRole: false, requestPending: true });
+  });
+});
+
 describe("sessions", () => {
   it("last 6 hours", async () => {
     await addUser({});

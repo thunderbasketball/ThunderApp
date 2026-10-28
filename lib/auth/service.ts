@@ -53,6 +53,7 @@ type UserRow = {
   thunder_request: boolean;
   thunder_coach: boolean;
   thunder_director: boolean;
+  on_team: boolean; // holds any team staff role (HeadCoach, AsstCoach, Manager, TeamParent)
 };
 
 export type SessionUser = {
@@ -90,10 +91,12 @@ export function isVerified(u: Pick<UserRow, "email" | "verified_email">): boolea
   return !!u.email && !!u.verified_email && u.email.trim().toLowerCase() === u.verified_email.trim().toLowerCase();
 }
 
-// TODO(Phase 4): team staff roles also count.
+// Coach or Director on the user record, or a place on any team's staff.
 function hasThunderRole(u: UserRow): boolean {
-  return u.thunder_coach || u.thunder_director;
+  return u.thunder_coach || u.thunder_director || u.on_team;
 }
+
+const ON_TEAM = "exists (select 1 from team_staff ts where ts.coach_id = u.coach_id) as on_team";
 
 // Deactivated / still-pending people can't go any further.
 function gate(u: UserRow): Step | null {
@@ -110,7 +113,7 @@ function newPinError(pin1: unknown, pin2: unknown): string | null {
 }
 
 async function findUser(q: PoolClient | Pool, cell: string): Promise<UserRow | null> {
-  const r = await q.query<UserRow>("select * from users where cell = $1", [cell]);
+  const r = await q.query<UserRow>(`select u.*, ${ON_TEAM} from users u where u.cell = $1`, [cell]);
   return r.rows[0] ?? null;
 }
 
@@ -245,7 +248,7 @@ export async function startSession(deps: Deps, q: PoolClient | Pool, coachId: st
 export async function getSessionUser(deps: Deps, token: string | undefined): Promise<SessionUser | null> {
   if (!token) return null;
   const r = await deps.pool.query<UserRow>(
-    `select u.* from sessions s join users u on u.coach_id = s.coach_id
+    `select u.*, ${ON_TEAM} from sessions s join users u on u.coach_id = s.coach_id
      where s.token_hash = $1 and s.expires_at > $2`,
     [sha256(token), deps.now()],
   );

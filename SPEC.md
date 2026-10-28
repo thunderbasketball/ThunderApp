@@ -106,6 +106,9 @@ Same features, same rules. This file is the source of truth for behavior.
 - Fields: name, allowed grades (one or more), gender, level (REC or COMP), staff list (user + role), created by.
 - **Create team** (Director): pick gender, grades, level, and a head coach. The head coach is an app user or a registration volunteer (parent who offered to coach). Picking a volunteer creates their login (starter PIN 1234, Coach role) from their registration cell and email; refused if their cell's last 7 digits match another user. Becoming a head coach grants the Coach role.
 - The 14 teams in the sheet's Teams tab are imported once (with a dry run first).
+- **Edit team** (Director): gender, grades, level, practice locations. The name follows the grades, gender and head coach; refused if the new name is taken.
+- **Staff** (Director, or the team's head coach for non-head roles): add from app users, registration volunteers, or a new person (name, cell, email). A cell already in the app uses that person; otherwise they get a login (starter PIN 1234). Adding a head coach replaces the current one and renames the team. Remove staff. Who added each person is recorded.
+- Any team staff role counts as a Thunder role for login. HeadCoach and AsstCoach also set ThunderCoach.
 - **Team dashboard**: staff, upcoming scheduled practices, players this team marked Interested, rostered players.
 - HeadCoach and Director can edit staff.
 

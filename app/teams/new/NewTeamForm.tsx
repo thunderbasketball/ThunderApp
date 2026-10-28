@@ -3,17 +3,11 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { GRADES, LEVELS, teamName } from "@/lib/team-names";
-import type { HeadCoachOption } from "@/lib/teams";
+import type { PersonOption } from "@/lib/teams";
 import { createTeam } from "../actions";
-import { card } from "../../ui";
+import { card, fieldLabel as label, inputCls, pillCls as pill, primaryBtn } from "../../ui";
 
-const label = "mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300";
-const pill = (on: boolean) =>
-  `rounded-full px-4 py-2 text-sm font-medium transition-colors ${
-    on ? "bg-thunder-blue text-white shadow-sm" : "bg-zinc-100 text-zinc-600 hover:text-zinc-900 dark:bg-zinc-800 dark:text-zinc-300"
-  }`;
-
-export default function NewTeamForm({ users, volunteers }: { users: HeadCoachOption[]; volunteers: HeadCoachOption[] }) {
+export default function NewTeamForm({ users, volunteers }: { users: PersonOption[]; volunteers: PersonOption[] }) {
   const router = useRouter();
   const [gender, setGender] = useState<"Boys" | "Girls" | null>(null);
   const [grades, setGrades] = useState<string[]>([]);
@@ -23,13 +17,13 @@ export default function NewTeamForm({ users, volunteers }: { users: HeadCoachOpt
   const [busy, start] = useTransition();
 
   const toggleGrade = (g: string) => setGrades((cur) => (cur.includes(g) ? cur.filter((x) => x !== g) : [...cur, g]));
-  const matches = (v: HeadCoachOption) => v.gender === gender && grades.includes(v.grade ?? "");
+  const matches = (v: PersonOption) => v.gender === gender && grades.includes(v.grade ?? "");
   const forThisTeam = volunteers.filter(matches);
   const otherVolunteers = volunteers.filter((v) => !matches(v));
   const picked = [...users, ...volunteers].find((o) => o.value === headCoach);
   const preview = gender && grades.length && picked ? teamName(gender, grades, picked.lastName) : null;
 
-  const option = (o: HeadCoachOption) => (
+  const option = (o: PersonOption) => (
     <option key={o.value} value={o.value}>
       {o.lastName}, {o.firstName} — {o.detail}
     </option>
@@ -86,7 +80,7 @@ export default function NewTeamForm({ users, volunteers }: { users: HeadCoachOpt
         <select
           value={headCoach}
           onChange={(e) => setHeadCoach(e.target.value)}
-          className="w-full rounded-xl border-0 bg-white px-3 py-3 text-base shadow-sm ring-1 ring-inset ring-zinc-950/10 outline-none focus:ring-2 focus:ring-thunder-blue dark:bg-zinc-900 dark:ring-white/15"
+          className={inputCls}
         >
           <option value="">Choose…</option>
           {forThisTeam.length > 0 && <optgroup label="Volunteers for this team">{forThisTeam.map(option)}</optgroup>}
@@ -114,7 +108,7 @@ export default function NewTeamForm({ users, volunteers }: { users: HeadCoachOpt
       <button
         type="submit"
         disabled={busy || !preview}
-        className="w-full rounded-xl bg-thunder-blue px-4 py-3 text-lg font-semibold text-white shadow-sm hover:bg-thunder-blue-dark disabled:opacity-40"
+        className={primaryBtn}
       >
         {busy ? "Creating…" : "Create team"}
       </button>

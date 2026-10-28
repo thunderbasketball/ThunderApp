@@ -2,15 +2,36 @@
 
 import { currentUser } from "@/lib/auth/server";
 import { db } from "@/lib/db";
-import { createTeam as create, type CreateTeamInput, type CreateTeamResult } from "@/lib/teams";
+import * as teams from "@/lib/teams";
+import type { CreateTeamInput, CreateTeamResult, UpdateTeamInput } from "@/lib/teams";
 
-export async function createTeam(input: CreateTeamInput): Promise<CreateTeamResult> {
+const deps = { pool: db, now: () => new Date() };
+type Result = { ok: true } | { ok: false; message: string };
+
+// Session and role are checked again inside each lib/teams function.
+async function guarded<T extends Result>(fn: (user: NonNullable<Awaited<ReturnType<typeof currentUser>>>) => Promise<T>): Promise<T | { ok: false; message: string }> {
   const user = await currentUser();
   if (!user) return { ok: false, message: "Please log in again." };
   try {
-    return await create({ pool: db, now: () => new Date() }, user, input);
+    return await fn(user);
   } catch (e) {
-    console.error("Create team failed:", e);
+    console.error("Team change failed:", e);
     return { ok: false, message: "Something went wrong. Please try again." };
   }
+}
+
+export async function createTeam(input: CreateTeamInput): Promise<CreateTeamResult> {
+  return guarded((u) => teams.createTeam(deps, u, input));
+}
+
+export async function updateTeam(id: string, input: UpdateTeamInput) {
+  return guarded((u) => teams.updateTeam(deps, u, String(id), input));
+}
+
+export async function addStaff(teamId: string, input: { role: unknown; person: unknown }) {
+  return guarded((u) => teams.addStaff(deps, u, String(teamId), input));
+}
+
+export async function removeStaff(teamId: string, input: { coachId: unknown; role: unknown }) {
+  return guarded((u) => teams.removeStaff(deps, u, String(teamId), input));
 }

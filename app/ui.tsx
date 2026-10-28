@@ -1,6 +1,17 @@
 // Shared building blocks so every page looks the same.
 import type { ReactNode } from "react";
 
+export const fieldLabel = "mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300";
+export const inputCls =
+  "w-full rounded-xl border-0 bg-white px-3 py-3 text-base shadow-sm ring-1 ring-inset ring-zinc-950/10 outline-none focus:ring-2 focus:ring-thunder-blue dark:bg-zinc-900 dark:ring-white/15";
+export const primaryBtn =
+  "w-full rounded-xl bg-thunder-blue px-4 py-3 text-lg font-semibold text-white shadow-sm hover:bg-thunder-blue-dark disabled:opacity-40";
+// A toggle pill (gender, grade, level choices).
+export const pillCls = (on: boolean) =>
+  `rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+    on ? "bg-thunder-blue text-white shadow-sm" : "bg-zinc-100 text-zinc-600 hover:text-zinc-900 dark:bg-zinc-800 dark:text-zinc-300"
+  }`;
+
 export const card = "rounded-2xl bg-white shadow-sm ring-1 ring-zinc-950/5 dark:bg-zinc-900 dark:ring-white/10";
 
 type Tone = "blue" | "orange" | "green" | "amber" | "red" | "pink" | "zinc";

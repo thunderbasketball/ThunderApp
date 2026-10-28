@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { currentUser, devBypass } from "@/lib/auth/server";
 import { db } from "@/lib/db";
-import { headCoachOptions } from "@/lib/teams";
+import { personOptions } from "@/lib/teams";
 import AppHeader from "../../AppHeader";
 import { PageTitle } from "../../ui";
 import NewTeamForm from "./NewTeamForm";
@@ -21,7 +21,7 @@ async function NewTeam() {
   if (!user) redirect(devBypass ? "/dev-login" : "/login");
   if (!user.isDirector) redirect("/");
 
-  const options = await headCoachOptions({ pool: db, now: () => new Date() }, user);
+  const options = await personOptions({ pool: db, now: () => new Date() }, user);
   return (
     <>
       <AppHeader user={user} tab="teams" />
