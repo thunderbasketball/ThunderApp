@@ -24,7 +24,8 @@ export type Deps = {
   devStarterBypass?: boolean;
   // Local testing only: every code is this value, no email is sent, no emails-per-hour limit.
   devFixedCode?: string;
-  // Until go-live: the PIN in the database is all it takes. No Set Your PIN, no email codes.
+  // Until go-live: people already in the users list log in with the PIN on file only (no Set Your PIN,
+  // no email check). New numbers still verify their email with a code (Create Account).
   pinOnly?: boolean;
 };
 
@@ -463,15 +464,6 @@ export async function startSignup(
     await lockCell(q, cell);
     const clash = await q.query("select 1 from users where cell = $1 or coach_id = $2", [cell, coachIdFromCell(cell)]);
     if (clash.rows.length) return err(MSG.taken);
-    if (deps.pinOnly) {
-      // No email code: the request goes straight to the Director. The email stays unverified.
-      await q.query(
-        `insert into users (coach_id, first_name, last_name, active, pin_hash, cell, email, thunder_request, created_at, updated_at)
-         values ($1, $2, $3, true, $4, $5, $6, true, $7, $7)`,
-        [coachIdFromCell(cell), firstName, lastName, pinHash, cell, email, deps.now()],
-      );
-      return { step: "done", message: MSG.requested };
-    }
     const fail = await issueCode(deps, q, cell, "signup", email, { firstName, lastName, pinHash });
     return fail ?? { step: "signupCode", maskedEmail: maskEmail(email) };
   });

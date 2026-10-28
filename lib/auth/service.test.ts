@@ -334,12 +334,13 @@ describe("PIN only (until go-live)", () => {
     expect(await auth.submitPin(deps, "4235550000", "5678")).toEqual({ step: "done", message: MSG.pending });
   });
 
-  it("Create Account sends the request with no email code", async () => {
+  it("Create Account (a number not in the users list) still verifies the email with a code", async () => {
     const s = await auth.startSignup(deps, { cell: CELL, firstName: "Earl", lastName: "Epps", email: "e@example.com", pin1: "2468", pin2: "2468" });
-    expect(s).toEqual({ step: "done", message: MSG.requested });
-    expect(mail.sent).toHaveLength(0);
-    expect(await userRow()).toMatchObject({ thunder_request: true, thunder_director: false, email: "e@example.com", verified_email: null });
-    expectError(await auth.startSignup(deps, { cell: CELL, firstName: "X", lastName: "Y", email: "x@example.com", pin1: "2468", pin2: "2468" }), MSG.taken);
+    expect(s).toEqual({ step: "signupCode", maskedEmail: "e***@example.com" });
+    expect(mail.sent[0].to).toBe("e@example.com");
+    expect(await userRow()).toBeUndefined();
+    expect(await auth.completeSignup(deps, CELL, mail.lastCode())).toEqual({ step: "done", message: MSG.requested });
+    expect(await userRow()).toMatchObject({ thunder_request: true, thunder_director: false, email: "e@example.com", verified_email: "e@example.com" });
   });
 
   it("Forgot PIN says to ask the Director", async () => {
