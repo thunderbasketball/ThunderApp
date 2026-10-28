@@ -6,7 +6,8 @@ import { coachIdFromCell, normalizeCell } from "../phone";
 import { STARTER_PIN, hashCode, hashPin, isStarterPin, newCode, newSessionToken, sha256, verifyPin } from "./crypto";
 import { cleanEmail, cleanName, isCode, isPin, maskEmail } from "./validate";
 
-export const SESSION_HOURS = 6;
+// Same device stays logged in this long after entering the PIN; then the PIN is asked again.
+export const SESSION_HOURS = 24;
 export const CODE_MINUTES = 15;
 export const CODE_MAX_TRIES = 5;
 export const CODES_PER_HOUR = 3;

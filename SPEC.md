@@ -74,9 +74,9 @@ Same features, same rules. This file is the source of truth for behavior.
 
 ### Sessions
 - The browser stores a random device ID (long random token, httpOnly secure cookie).
-- The server keeps the session for 6 hours.
+- The server keeps the session (device ID + login time) for 24 hours from the PIN login. Opening the app on the same device within that time logs straight in; after it, the PIN is asked again.
 - **Roles are re-read from the user record on every request.** Removing a role, or deactivating a user, takes effect on the next click.
-- Logout deletes the session on the server.
+- Logout deletes the session on the server and the device ID cookie, so the next visit needs the PIN.
 
 ## 2. Roles
 
