@@ -320,10 +320,11 @@ describe("PIN only (until go-live)", () => {
     expectError(await auth.submitPin(deps, CELL, "5678"), MSG.locked);
   });
 
-  it("no PIN on file: can't log in", async () => {
+  it("no PIN stored means the starter PIN 1234", async () => {
     await addUser({ pin: null });
-    expectError(await auth.lookupPhone(deps, CELL), MSG.noPin);
-    expectError(await auth.submitPin(deps, CELL, "1234"), MSG.noPin);
+    expect(await auth.lookupPhone(deps, CELL)).toEqual({ step: "pin" });
+    expectError(await auth.submitPin(deps, CELL, "5678"), /Wrong PIN/);
+    token(await auth.submitPin(deps, CELL, "1234"));
   });
 
   it("inactive and pending people are still stopped", async () => {

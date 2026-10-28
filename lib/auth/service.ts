@@ -86,7 +86,6 @@ export const MSG = {
   badEmail: "Enter a valid email address.",
   badName: "Enter your first and last name (letters only).",
   taken: "That number is already in use. Please contact the Director.",
-  noPin: "No PIN is set for this number yet. Please contact the Director.",
   askDirector: "Please contact the Director to reset your PIN.",
 };
 
@@ -214,7 +213,8 @@ async function checkPin(deps: Deps, q: PoolClient, user: UserRow, pin: unknown):
   if (locked_until && locked_until > now) return err(MSG.locked);
   if (locked_until) failed_count = 0; // lock has run out: fresh start
 
-  if (isPin(pin) && (await verifyPin(pin, user.pin_hash))) {
+  // No PIN stored means the starter PIN 1234.
+  if (isPin(pin) && (user.pin_hash ? await verifyPin(pin, user.pin_hash) : pin === STARTER_PIN)) {
     await q.query("update pin_lockouts set failed_count = 0, locked_until = null where cell = $1", [user.cell]);
     return null;
   }
@@ -284,7 +284,7 @@ export async function lookupPhone(deps: Deps, cellInput: unknown): Promise<Step>
   if (deps.devStarterBypass && user.active) return { step: "devCode" };
   const blocked = gate(user);
   if (blocked) return blocked;
-  if (deps.pinOnly) return user.pin_hash ? { step: "pin" } : err(MSG.noPin);
+  if (deps.pinOnly) return { step: "pin" };
   if (await isStarterPin(user.pin_hash)) {
     // Starter PIN: skip the PIN step. Code goes to the email on file, or ask for one.
     if (!user.email) return { step: "starterEmail" };
@@ -346,10 +346,7 @@ export async function submitPin(deps: Deps, cellInput: unknown, pin: unknown): P
     if (!user) return { step: "create" };
     const blocked = gate(user);
     if (blocked) return blocked;
-    if (deps.pinOnly) {
-      if (!user.pin_hash) return err(MSG.noPin);
-      return (await checkPin(deps, q, user, pin)) ?? startSession(deps, q, user.coach_id);
-    }
+    if (deps.pinOnly) return (await checkPin(deps, q, user, pin)) ?? startSession(deps, q, user.coach_id);
     // 1234 never logs anyone in (except with the local testing bypass).
     if (await isStarterPin(user.pin_hash)) {
       if (deps.devStarterBypass && pin === STARTER_PIN) return startSession(deps, q, user.coach_id);
