@@ -81,7 +81,6 @@ async function Teams() {
                           <p className="text-amber-700 dark:text-amber-400">No head coach yet</p>
                         )}
                         {t.practiceLocations.length > 0 && <p>Practices: {t.practiceLocations.join(", ")}</p>}
-                        <p className="text-xs">Created by {t.createdBy}</p>
                       </div>
                     </div>
                     <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden className="mt-3 size-5 shrink-0 text-zinc-300">
