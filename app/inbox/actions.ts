@@ -30,3 +30,10 @@ export async function sendAnnouncement(input: { title: unknown; body: unknown } 
 export async function deleteAnnouncement(id: string) {
   return guarded((u) => ann.deleteAnnouncement(deps, u, String(id)));
 }
+// "Got it" on the new-announcement pop-up.
+export async function acknowledge(ids: string[]) {
+  return guarded(async (u) => {
+    await ann.markRead(deps, u, Array.isArray(ids) ? ids.filter((x) => typeof x === "string") : []);
+    return { ok: true as const };
+  });
+}

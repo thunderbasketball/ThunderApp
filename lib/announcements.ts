@@ -225,6 +225,21 @@ export async function listInbox(deps: Deps, viewer: SessionUser): Promise<InboxI
   return r.rows;
 }
 
+export const POPUP_HOURS = 24;
+
+// Unread announcements under 24 hours old: shown in a pop-up the next time the person opens the app, until they
+// tap Got it. Older ones only wait in the inbox.
+export async function popupAnnouncements(deps: Deps, viewer: SessionUser): Promise<InboxItem[]> {
+  const r = await deps.pool.query<InboxItem>(
+    `select a.id::text, a.title, a.body, a.sent_by as "sentBy", a.created_at as "createdAt", false as read
+     from announcement_recipients r join announcements a on a.id = r.announcement_id
+     where r.coach_id = $1 and r.read_at is null and a.created_at > $2
+     order by a.created_at, a.id limit 10`,
+    [viewer.coachId, new Date(deps.now().getTime() - POPUP_HOURS * HOUR)],
+  );
+  return r.rows;
+}
+
 export async function unreadCount(deps: Deps, viewer: SessionUser): Promise<number> {
   const r = await deps.pool.query<{ n: number }>(
     "select count(*)::int as n from announcement_recipients where coach_id = $1 and read_at is null",

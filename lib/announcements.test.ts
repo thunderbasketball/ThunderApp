@@ -6,6 +6,7 @@ import {
   listInbox,
   listSent,
   markRead,
+  popupAnnouncements,
   previewAudience,
   sendAnnouncement,
   sendUnreadEmails,
@@ -167,6 +168,21 @@ describe("announcements", () => {
     const mail: string[] = [];
     hours(9);
     expect(await sendUnreadEmails({ ...deps(), appUrl: "x", sendEmail: async (to) => void mail.push(to) })).toBe(0);
+  });
+
+  it("pop-up: unread and under 24 hours old, oldest first, until acknowledged", async () => {
+    await sendAnnouncement(deps(), director, { ...msg, users: ["5550001"] });
+    hours(2);
+    await sendAnnouncement(deps(), director, { title: "Second", body: "2", users: ["5550001"] });
+    expect((await popupAnnouncements(deps(), head)).map((a) => a.title)).toEqual(["Gym change", "Second"]);
+    expect(await popupAnnouncements(deps(), parent)).toEqual([]);
+
+    hours(22.5); // the first is now 24.5 hours old: inbox only
+    const pop = await popupAnnouncements(deps(), head);
+    expect(pop.map((a) => a.title)).toEqual(["Second"]);
+    await markRead(deps(), head, pop.map((a) => a.id)); // Got it
+    expect(await popupAnnouncements(deps(), head)).toEqual([]);
+    expect(await unreadCount(deps(), head)).toBe(1); // the older one is still unread in the inbox
   });
 
   it("inbox: only your own, newest first; opening marks read", async () => {

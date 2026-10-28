@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { after } from "next/server";
-import { unreadCount } from "@/lib/announcements";
+import { popupAnnouncements, unreadCount } from "@/lib/announcements";
 import type { SessionUser } from "@/lib/auth/service";
 import { currentContexts } from "@/lib/contexts-server";
 import { db } from "@/lib/db";
@@ -10,6 +10,7 @@ import { myPracticesToday } from "@/lib/practice-attendance";
 import { localParts, zonedTime } from "@/lib/time";
 import { syncIfStale } from "@/lib/teamsnap/scheduler";
 import { stopActing } from "./act-as/actions";
+import AnnouncementPopup from "./AnnouncementPopup";
 import { LogoutButton } from "./HomeActions";
 import { Avatar } from "./ui";
 
@@ -30,10 +31,12 @@ async function checkInsFor(user: SessionUser): Promise<number> {
 // `context` is the role this page is shown as ("director" or "team:<id>"); it highlights that chip.
 export default async function AppHeader({ user, tab, context }: { user: SessionUser; tab?: Tab; context?: string }) {
   const deps = { pool: db, now: () => new Date() };
-  const [{ contexts }, unread, myEvents] = await Promise.all([
+  const [{ contexts }, unread, myEvents, popups] = await Promise.all([
     currentContexts(user),
     unreadCount(deps, user),
     user.isDirector ? 0 : checkInsFor(user),
+    // Not while a Director is viewing as this person.
+    user.actingBy ? [] : popupAnnouncements(deps, user),
   ]);
   // Backup for the sheet timer: after this page is sent, refresh registrations if the last check is stale.
   after(syncIfStale);
@@ -159,6 +162,7 @@ export default async function AppHeader({ user, tab, context }: { user: SessionU
           </nav>
         )}
       </header>
+      {popups.length > 0 && <AnnouncementPopup items={popups} />}
 
       {/* Phones: a tab bar along the bottom, every tab visible, within thumb reach. Kept outside the header,
         whose blur effect would otherwise pin it to the header instead of the screen. */}
