@@ -110,11 +110,17 @@ export default function LoginFlow() {
               autoComplete="tel-national"
               placeholder="(423) 555-1234"
               value={cell}
-              onChange={(e) => setCell(e.target.value)}
+              onChange={(e) => {
+                const v = e.target.value;
+                setCell(v);
+                // Goes on by itself at the 10th digit. Area codes never start with 1, so a leading 1 (+1) waits for one more.
+                const digits = v.replace(/\D/g, "");
+                if (digits.length === (digits.startsWith("1") ? 11 : 10) && !busy) go(() => act.lookupPhone(v));
+              }}
               autoFocus
             />
           </Field>
-          <Submit busy={busy}>Continue</Submit>
+          {busy && <p className="text-center text-sm text-zinc-500">Checking…</p>}
         </Form>
       );
       break;
