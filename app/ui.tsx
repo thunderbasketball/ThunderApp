@@ -69,9 +69,19 @@ export function Notice({ tone, children }: { tone: "green" | "red"; children: Re
 }
 
 // A collapsible card with a title, a count, and a list inside.
-export function GroupCard({ title, count, children }: { title: ReactNode; count: number; children: ReactNode }) {
+export function GroupCard({
+  title,
+  count,
+  children,
+  defaultOpen = true,
+}: {
+  title: ReactNode;
+  count: number;
+  children: ReactNode;
+  defaultOpen?: boolean;
+}) {
   return (
-    <details className={`${card} group overflow-hidden`} open>
+    <details className={`${card} group overflow-hidden`} open={defaultOpen}>
       <summary className="flex cursor-pointer select-none items-center justify-between gap-3 px-4 py-3">
         <span className="font-semibold">{title}</span>
         <span className="flex items-center gap-2">
