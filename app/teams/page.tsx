@@ -3,10 +3,10 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { currentUser, devBypass } from "@/lib/auth/server";
 import { db } from "@/lib/db";
-import { formatCell } from "@/lib/phone";
 import { listTeams, type TeamListItem } from "@/lib/teams";
 import AppHeader from "../AppHeader";
 import { Chip, GroupCard, PageTitle, Stats } from "../ui";
+import { ContactChip, GroupTextButton } from "./Contacts";
 
 export default function TeamsPage() {
   return (
@@ -31,6 +31,7 @@ async function Teams() {
     g.teams.push(t);
   }
   const count = (level: string) => teams.filter((t) => t.level === level).length;
+  const coachCells = teams.flatMap((t) => t.staff.filter((s) => s.role === "HeadCoach" || s.role === "AsstCoach").map((s) => s.cell));
 
   return (
     <>
@@ -45,6 +46,9 @@ async function Teams() {
             + New team
           </Link>
         </div>
+        <div className="mb-4">
+          <GroupTextButton cells={coachCells} label="Text all coaches" />
+        </div>
         <Stats
           items={[
             { label: "Teams", value: teams.length },
@@ -57,8 +61,8 @@ async function Teams() {
           {groups.map((g) => (
             <GroupCard key={`${g.level}-${g.gender}`} title={`${g.level === "COMP" ? "Comp" : "Rec"} · ${g.gender}`} count={g.teams.length}>
               {g.teams.map((t) => (
-                <li key={t.id}>
-                  <Link href={`/teams/${t.id}`} className="flex gap-3 px-4 py-3 hover:bg-zinc-50 dark:hover:bg-white/5">
+                <li key={t.id} className="px-4 py-3">
+                  <Link href={`/teams/${t.id}`} className="-mx-2 flex gap-3 rounded-xl px-2 py-1 hover:bg-zinc-50 dark:hover:bg-white/5">
                     <span
                       className={`flex size-10 shrink-0 items-center justify-center rounded-xl text-sm font-bold text-white ${
                         t.gender === "Boys" ? "bg-thunder-blue" : "bg-pink-600"
@@ -71,17 +75,10 @@ async function Teams() {
                         <p className="truncate font-semibold">{t.name}</p>
                         <Chip tone={t.level === "COMP" ? "orange" : "zinc"}>{t.level}</Chip>
                       </div>
-                      <div className="mt-0.5 space-y-0.5 text-sm text-zinc-500 dark:text-zinc-400">
-                        <p>{gradesLabel(t.grades)}</p>
-                        {t.headCoach ? (
-                          <p>
-                            Head coach: {t.headCoach.first} {t.headCoach.last} · <span className="whitespace-nowrap">{formatCell(t.headCoach.cell)}</span>
-                          </p>
-                        ) : (
-                          <p className="text-amber-700 dark:text-amber-400">No head coach yet</p>
-                        )}
-                        {t.practiceLocations.length > 0 && <p>Practices: {t.practiceLocations.join(", ")}</p>}
-                      </div>
+                      <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">
+                        {gradesLabel(t.grades)}
+                        {t.practiceLocations.length > 0 && ` · ${t.practiceLocations.join(", ")}`}
+                      </p>
                     </div>
                     <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden className="mt-3 size-5 shrink-0 text-zinc-300">
                       <path
@@ -91,6 +88,12 @@ async function Teams() {
                       />
                     </svg>
                   </Link>
+                  <div className="mt-1.5 flex flex-wrap gap-x-1 gap-y-1 pl-12">
+                    {t.staff.map((p) => (
+                      <ContactChip key={p.role} person={p} team={t.name} />
+                    ))}
+                    {!t.headCoach && <p className="text-sm text-amber-700 dark:text-amber-400">No head coach yet</p>}
+                  </div>
                 </li>
               ))}
             </GroupCard>

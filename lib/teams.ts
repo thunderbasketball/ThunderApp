@@ -41,24 +41,28 @@ export type TeamListItem = {
   createdBy: string;
   practiceLocations: string[];
   headCoach: { first: string; last: string; cell: string } | null;
+  staff: Contact[]; // Head Coach, Assistant, Manager, Team Parent order
 };
+
+export type Contact = { coachId: string; role: Role; first: string; last: string; cell: string; email: string | null };
+
+const roleOrder = `array_position(array['HeadCoach','AsstCoach','Manager','TeamParent'], s.role)`;
 
 // Director only. Grouped by level (Comp first), then Gender; youngest grade first, then name.
 export async function listTeams(deps: Deps, viewer: SessionUser): Promise<TeamListItem[]> {
   if (!viewer.isDirector) throw new Error("Director only");
-  const r = await deps.pool.query<TeamListItem & { hFirst: string | null; hLast: string; hCell: string }>(
+  const r = await deps.pool.query<Omit<TeamListItem, "headCoach">>(
     `select t.id::text, t.name, t.gender, t.grades, t.level, t.created_by as "createdBy", t.practice_locations as "practiceLocations",
-            u.first_name as "hFirst", u.last_name as "hLast", u.cell as "hCell"
+            coalesce((select json_agg(json_build_object('coachId', u.coach_id, 'role', s.role, 'first', u.first_name, 'last', u.last_name,
+                                                        'cell', u.cell, 'email', u.email) order by ${roleOrder})
+                      from team_staff s join users u on u.coach_id = s.coach_id where s.team_id = t.id), '[]') as staff
      from teams t
-     left join team_staff s on s.team_id = t.id and s.role = 'HeadCoach'
-     left join users u on u.coach_id = s.coach_id
      order by t.level = 'COMP' desc, t.gender, t.grade_sort, lower(t.name)`,
   );
-  return r.rows.map(({ hFirst, hLast, hCell, ...t }) => ({
-    ...t,
-    grades: sortGrades(t.grades),
-    headCoach: hFirst === null ? null : { first: hFirst, last: hLast, cell: hCell },
-  }));
+  return r.rows.map((t) => {
+    const h = t.staff.find((s) => s.role === "HeadCoach");
+    return { ...t, grades: sortGrades(t.grades), headCoach: h ? { first: h.first, last: h.last, cell: h.cell } : null };
+  });
 }
 
 const sortGrades = (g: string[]) => [...g].sort((a, b) => gradeSort(a) - gradeSort(b));
@@ -73,19 +77,18 @@ export type StaffMember = {
   addedBy: string;
 };
 
-export type TeamDetail = Omit<TeamListItem, "headCoach"> & {
+export type TeamDetail = Omit<TeamListItem, "headCoach" | "staff"> & {
   staff: StaffMember[];
   myRoles: Role[]; // the viewer's own roles on this team
   canEditTeam: boolean;
   canEditStaff: boolean;
 };
 
-const roleOrder = `array_position(array['HeadCoach','AsstCoach','Manager','TeamParent'], s.role)`;
 
 // The Director, or anyone on this team's staff. Null if the viewer can't see the team.
 export async function getTeam(deps: Deps, viewer: SessionUser, id: string): Promise<TeamDetail | null> {
   if (!/^\d{1,18}$/.test(id)) return null;
-  const t = await deps.pool.query<Omit<TeamListItem, "headCoach">>(
+  const t = await deps.pool.query<Omit<TeamListItem, "headCoach" | "staff">>(
     `select id::text, name, gender, grades, level, created_by as "createdBy", practice_locations as "practiceLocations"
      from teams where id = $1`,
     [id],

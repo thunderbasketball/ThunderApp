@@ -58,7 +58,9 @@ describe("teams", () => {
     expect(r).toMatchObject({ ok: true, name: "4G Epps" });
     const teams = await listTeams(deps(), director);
     expect(teams).toEqual([
-      expect.objectContaining({ name: "4G Epps", gender: "Girls", grades: ["4"], level: "REC", createdBy: "Earl Epps", headCoach: { first: "Earl", last: "Epps", cell: "4239913694" } }),
+      expect.objectContaining({ name: "4G Epps", gender: "Girls", grades: ["4"], level: "REC", createdBy: "Earl Epps", headCoach: { first: "Earl", last: "Epps", cell: "4239913694" },
+        staff: [{ coachId: "9913694", role: "HeadCoach", first: "Earl", last: "Epps", cell: "4239913694", email: null }],
+      }),
     ]);
   });
 
