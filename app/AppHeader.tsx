@@ -1,7 +1,9 @@
 import Image from "next/image";
 import Link from "next/link";
+import { after } from "next/server";
 import type { SessionUser } from "@/lib/auth/service";
 import { currentContexts } from "@/lib/contexts-server";
+import { syncIfStale } from "@/lib/teamsnap/scheduler";
 import { LogoutButton } from "./HomeActions";
 import { Avatar } from "./ui";
 
@@ -11,6 +13,8 @@ type Tab = "teams" | "users" | "players" | "coaches";
 // `context` is the role this page is shown as ("director" or "team:<id>"); it highlights that chip.
 export default async function AppHeader({ user, tab, context }: { user: SessionUser; tab?: Tab; context?: string }) {
   const { contexts } = await currentContexts(user);
+  // Backup for the sheet timer: after this page is sent, refresh registrations if the last check is stale.
+  after(syncIfStale);
   const tabs: { key: Tab; href: string; label: string }[] = [
     { key: "teams", href: "/teams", label: "Teams" },
     { key: "users", href: "/users", label: "Users" },
