@@ -345,7 +345,7 @@ async function lockTeamForStaff(q: PoolClient, viewer: SessionUser, teamId: stri
 
 export type AddStaffResult = Result<{ who: string; newLogin: boolean; name: string }>;
 
-// Adding a head coach replaces the current one and renames the team.
+// One person per role. Adding a head coach replaces the current one and renames the team.
 export async function addStaff(deps: Deps, viewer: SessionUser, teamId: string, input: { role: unknown; person: unknown }): Promise<AddStaffResult> {
   const role = (ROLES as readonly unknown[]).includes(input.role) ? (input.role as Role) : null;
   if (!role) return { ok: false, message: "Pick a role." };
@@ -355,6 +355,15 @@ export async function addStaff(deps: Deps, viewer: SessionUser, teamId: string, 
   return run(() =>
     withTx(deps.pool, async (q) => {
       await lockTeamForStaff(q, viewer, teamId, role);
+      // One person per role. A new head coach replaces the old one; other roles must be removed first.
+      if (role !== "HeadCoach") {
+        const held = await q.query<{ who: string }>(
+          `select u.first_name || ' ' || u.last_name as who from team_staff s join users u on u.coach_id = s.coach_id
+           where s.team_id = $1 and s.role = $2`,
+          [teamId, role],
+        );
+        if (held.rows[0]) throw new UserError(`This team already has a ${roleLabel(role)} (${held.rows[0].who}). Remove them first.`);
+      }
       const p = await resolvePerson(q, input.person, COACH_ROLES.includes(role), now);
       if (role === "HeadCoach") await q.query("delete from team_staff where team_id = $1 and role = 'HeadCoach'", [teamId]);
       const r = await q.query(

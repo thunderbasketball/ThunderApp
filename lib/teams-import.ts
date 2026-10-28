@@ -119,11 +119,11 @@ async function importOne(q: PoolClient, t: SheetTeam, { by, now }: { by: string;
       staff.push({ ...s, status: "unmatched" });
       continue;
     }
-    // A team keeps the head coach it already has.
+    // One person per role: a team keeps whoever already holds it.
     const r = await q.query(
       `insert into team_staff (team_id, coach_id, role, added_at, added_by)
        select $1, $2, $3, $4, $5
-       where not ($3 = 'HeadCoach' and exists (select 1 from team_staff where team_id = $1 and role = 'HeadCoach'))
+       where not exists (select 1 from team_staff where team_id = $1 and role = $3)
        on conflict do nothing`,
       [teamId, s.coachId, s.role, now, by],
     );

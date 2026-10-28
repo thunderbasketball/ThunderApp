@@ -40,7 +40,7 @@ try {
   const by = d.rows[0]?.name ?? "Director";
   const result = await importTeams(pool, parsed, { by, now: new Date(), dryRun });
 
-  const label = { user: "app user", newLogin: "NEW LOGIN from registration", already: "already on team", unmatched: "NOT FOUND" };
+  const label = { user: "app user", newLogin: "NEW LOGIN from registration", already: "role already filled", unmatched: "NOT FOUND" };
   console.log(`${dryRun ? "Dry run – would import" : "Imported"} ${parsed.teams.length} teams:\n`);
   for (const t of result) {
     console.log(`${t.name}  (${t.status === "created" ? "new" : "already in app"})`);

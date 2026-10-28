@@ -104,12 +104,14 @@ describe("editing teams and staff", () => {
     expect(await staff()).toEqual(["HeadCoach:Head"]);
   });
 
-  it("a person can't hold the same role twice", async () => {
+  it("one person per role: a filled role is refused until it's removed", async () => {
     await addStaff(deps(), director, teamId, { role: "Manager", person: "user:5550002" });
-    expect(await addStaff(deps(), director, teamId, { role: "Manager", person: "user:5550002" })).toEqual({
-      ok: false,
-      message: "Ollie Other is already Manager on this team.",
-    });
+    const again = await addStaff(deps(), director, teamId, { role: "Manager", person: { first: "New", last: "Person", cell: "4235558888", email: "" } });
+    expect(again).toEqual({ ok: false, message: "This team already has a Manager (Ollie Other). Remove them first." });
+    expect((await db.pool.query("select count(*)::int n from users where cell = '4235558888'")).rows[0].n).toBe(0); // nothing created
+    await removeStaff(deps(), director, teamId, { coachId: "5550002", role: "Manager" });
+    expect(await addStaff(deps(), director, teamId, { role: "Manager", person: { first: "New", last: "Person", cell: "4235558888", email: "" } })).toMatchObject({ ok: true });
+    expect(await staff()).toEqual(["HeadCoach:Head", "Manager:Person"]);
   });
 
   it("a new head coach replaces the old one and renames the team", async () => {

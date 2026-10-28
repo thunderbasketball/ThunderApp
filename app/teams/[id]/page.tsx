@@ -114,7 +114,7 @@ async function Team({ params }: { params: PageProps<"/teams/[id]">["params"] }) 
             gender={team.gender}
             grades={team.grades}
             canSetHead={asDirector}
-            hasHead={team.staff.some((s) => s.role === "HeadCoach")}
+            filledRoles={team.staff.map((s) => s.role)}
             users={options?.users ?? []}
             volunteers={options?.volunteers ?? []}
           />

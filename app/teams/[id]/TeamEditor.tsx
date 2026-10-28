@@ -143,7 +143,7 @@ export function AddStaffForm({
   gender,
   grades,
   canSetHead,
-  hasHead,
+  filledRoles,
   users,
   volunteers,
 }: {
@@ -151,13 +151,16 @@ export function AddStaffForm({
   gender: "Boys" | "Girls";
   grades: string[];
   canSetHead: boolean;
-  hasHead: boolean;
+  filledRoles: Role[];
   users: PersonOption[];
   volunteers: PersonOption[];
 }) {
   const router = useRouter();
-  const roles = ROLE_CHOICES.filter((r) => canSetHead || r.role !== "HeadCoach");
-  const [role, setRole] = useState<Role>(hasHead || !canSetHead ? "AsstCoach" : "HeadCoach");
+  // One person per role: open roles only. The Director can also replace the head coach.
+  const hasHead = filledRoles.includes("HeadCoach");
+  const roles = ROLE_CHOICES.filter((r) => (r.role === "HeadCoach" ? canSetHead : !filledRoles.includes(r.role)));
+  const [picked, setRole] = useState<Role | null>(null);
+  const role = picked && roles.some((r) => r.role === picked) ? picked : (roles.find((r) => r.role !== "HeadCoach") ?? roles[0])?.role;
   const pickList = users.length + volunteers.length > 0;
   const [person, setPerson] = useState(pickList ? "" : NEW);
   const [p, setP] = useState({ first: "", last: "", cell: "", email: "" });
@@ -172,6 +175,13 @@ export function AddStaffForm({
     </option>
   );
   const ready = person === NEW ? p.first && p.last && p.cell : !!person;
+
+  if (!role)
+    return (
+      <p className={`${card} p-5 text-sm text-zinc-500`}>
+        {done ?? "All staff roles are filled. Remove someone to add a different person."}
+      </p>
+    );
 
   return (
     <form
