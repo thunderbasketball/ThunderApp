@@ -12,7 +12,7 @@ export async function createTestDb() {
   await migrate(setup, schema);
   await setup.end();
 
-  const pool = new pg.Pool({ ...config, options: `-c search_path=${schema}`, max: 4 });
+  const pool = new pg.Pool({ ...config, options: `-c search_path=${schema}`, max: 3, idleTimeoutMillis: 1000 });
 
   return {
     pool,
