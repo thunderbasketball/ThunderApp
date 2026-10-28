@@ -28,6 +28,17 @@ body {
   color: var(--foreground);
 }
 
+/* Room at the bottom of the page for the phone tab bar, so it never covers the last row. */
+@media (max-width: 639px) {
+  body:has(#bottom-tabs) {
+    padding-bottom: calc(4rem + env(safe-area-inset-bottom));
+  }
+  /* Pop-up messages sit above the tab bar. */
+  body:has(#bottom-tabs) .toast {
+    bottom: calc(5rem + env(safe-area-inset-bottom));
+  }
+}
+
 /* Hide the default triangle on collapsible groups; GroupCard draws its own chevron. */
 summary::-webkit-details-marker {
   display: none;

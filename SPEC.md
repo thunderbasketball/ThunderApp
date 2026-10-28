@@ -197,6 +197,7 @@ One-time import from the current Sheets into Supabase: users, teams + staff, gym
 - PINs and codes are hashed. Supabase service key lives only on the server.
 
 ## 10. General UI rules
+- Director tabs (Teams, Practice, Events, Users, Players, Coaches): on phones, a tab bar fixed to the bottom of the screen with an icon and short label for each, all visible at once; on tablets and computers, a row of tabs under the header.
 
 - Mobile-first. Coaches use this on their phones. Keep pages fast and light.
 - Every list or table is sorted.

@@ -43,7 +43,7 @@ export function Toast({ message }: { message: string }) {
   return (
     <p
       role="status"
-      className="fixed inset-x-4 bottom-4 z-20 mx-auto max-w-md rounded-xl bg-zinc-900 px-4 py-3 text-sm text-white shadow-lg dark:bg-white dark:text-zinc-900"
+      className="fixed inset-x-4 bottom-4 z-30 mx-auto max-w-md rounded-xl toast bg-zinc-900 px-4 py-3 text-sm text-white shadow-lg dark:bg-white dark:text-zinc-900"
     >
       {message}
     </p>
