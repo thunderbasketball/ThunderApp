@@ -43,7 +43,7 @@ export type TeamListItem = {
   headCoach: { first: string; last: string; cell: string } | null;
 };
 
-// Director only. Grouped by Gender, then top grade; sorted by name.
+// Director only. Grouped by level (Comp first), then Gender; youngest grade first, then name.
 export async function listTeams(deps: Deps, viewer: SessionUser): Promise<TeamListItem[]> {
   if (!viewer.isDirector) throw new Error("Director only");
   const r = await deps.pool.query<TeamListItem & { hFirst: string | null; hLast: string; hCell: string }>(
@@ -52,7 +52,7 @@ export async function listTeams(deps: Deps, viewer: SessionUser): Promise<TeamLi
      from teams t
      left join team_staff s on s.team_id = t.id and s.role = 'HeadCoach'
      left join users u on u.coach_id = s.coach_id
-     order by t.gender, t.grade_sort, lower(t.name)`,
+     order by t.level = 'COMP' desc, t.gender, t.grade_sort, lower(t.name)`,
   );
   return r.rows.map(({ hFirst, hLast, hCell, ...t }) => ({
     ...t,

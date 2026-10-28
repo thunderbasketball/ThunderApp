@@ -24,20 +24,20 @@ async function Teams() {
   if (!user.isDirector) redirect("/");
 
   const teams = await listTeams({ pool: db, now: () => new Date() }, user);
-  const groups: { gender: string; teams: TeamListItem[] }[] = [];
+  const groups: { level: string; gender: string; teams: TeamListItem[] }[] = [];
   for (const t of teams) {
     let g = groups.at(-1);
-    if (!g || g.gender !== t.gender) groups.push((g = { gender: t.gender, teams: [] }));
+    if (!g || g.level !== t.level || g.gender !== t.gender) groups.push((g = { level: t.level, gender: t.gender, teams: [] }));
     g.teams.push(t);
   }
-  const count = (gender: string) => teams.filter((t) => t.gender === gender).length;
+  const count = (level: string) => teams.filter((t) => t.level === level).length;
 
   return (
     <>
       <AppHeader user={user} tab="teams" />
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6">
         <div className="flex items-start justify-between gap-3">
-          <PageTitle title="Teams" subtitle="Grouped by gender, sorted by grade" />
+          <PageTitle title="Teams" subtitle="Grouped by Comp or Rec, then gender; youngest grade first" />
           <Link
             href="/teams/new"
             className="shrink-0 rounded-full bg-thunder-blue px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-thunder-blue-dark"
@@ -48,22 +48,14 @@ async function Teams() {
         <Stats
           items={[
             { label: "Teams", value: teams.length },
-            {
-              label: "Boys",
-              value: count("Boys"),
-              tone: "text-blue-600 dark:text-blue-400",
-            },
-            {
-              label: "Girls",
-              value: count("Girls"),
-              tone: "text-pink-600 dark:text-pink-400",
-            },
+            { label: "Comp", value: count("COMP"), tone: "text-thunder-orange" },
+            { label: "Rec", value: count("REC") },
           ]}
         />
         {!teams.length && <p className="text-zinc-500">No teams yet. Tap “+ New team” to create one.</p>}
         <div className="space-y-3">
           {groups.map((g) => (
-            <GroupCard key={g.gender} title={g.gender} count={g.teams.length}>
+            <GroupCard key={`${g.level}-${g.gender}`} title={`${g.level === "COMP" ? "Comp" : "Rec"} · ${g.gender}`} count={g.teams.length}>
               {g.teams.map((t) => (
                 <li key={t.id}>
                   <Link href={`/teams/${t.id}`} className="flex gap-3 px-4 py-3 hover:bg-zinc-50 dark:hover:bg-white/5">

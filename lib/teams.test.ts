@@ -115,4 +115,14 @@ describe("teams", () => {
     await expect(listTeams(deps(), coach)).rejects.toThrow("Director only");
     await expect(personOptions(deps(), coach)).rejects.toThrow("Director only");
   });
+
+  it("lists Comp before Rec, then Boys before Girls, youngest grade first", async () => {
+    const mk = (gender: string, grades: string[], level: string) => createTeam(deps(), director, { gender, grades, level, headCoach: "user:9913694" });
+    await mk("Girls", ["5"], "REC");
+    await mk("Boys", ["10"], "COMP");
+    await mk("Boys", ["2"], "COMP");
+    await mk("Girls", ["K"], "COMP");
+    await mk("Boys", ["4"], "REC");
+    expect((await listTeams(deps(), director)).map((t) => t.name)).toEqual(["2B Epps", "10B Epps", "KG Epps", "4B Epps", "5G Epps"]);
+  });
 });
