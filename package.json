@@ -12,7 +12,8 @@
     "db:migrate": "node --env-file=.env.local scripts/migrate.ts",
     "user": "node --env-file=.env.local scripts/user.ts",
     "import:teamsnap": "tsx --env-file=.env.local scripts/import-teamsnap.ts",
-    "import:teams": "tsx --env-file=.env.local scripts/import-teams.ts"
+    "import:teams": "tsx --env-file=.env.local scripts/import-teams.ts",
+    "import:users": "tsx --env-file=.env.local scripts/import-users.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0",

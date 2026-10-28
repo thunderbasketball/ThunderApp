@@ -15,6 +15,7 @@ Secrets live only in `.env.local` (never committed, never pasted into chat). Two
 - `npm run db:migrate` — apply new `db/migrations/*.sql` files
 - `npm run user -- list | add <cell> <first> <last> [email] | director <cell> | delete <cell>` — test accounts until the Users tab exists
 - `npm run import:teamsnap -- --sheet [--dry-run]` (or a `"data/import/<file>.csv"` path) — replace registrations from the Winter Registrations sheet's TeamSnapAPI tab (all columns kept; birthdates shifted +1 day when TeamSnap shows an evening time)
+- `npm run import:users -- [--dry-run]` — import existing users from MasterAuth (`MASTERAUTH_SHEET`); safe to re-run. Sheet wins for names/emails/PINs/Active, Thunder roles combined, Scenic City columns copied. Never prints PINs.
 - `npm run import:teams -- [--dry-run]` — import the sheet's Teams tab; safe to re-run (keeps existing teams, adds staff who now exist). Staff matched by CoachID to users, else to a registration parent's cell (creates their login).
 - Google Sheets: read as service account `thunder-sheets@thunderapp-513001.iam.gserviceaccount.com` via `lib/google/sheets.ts`; key in `data/google-service-account.json` (never print or paste it); sheet links in `.env.local` (`REGISTRATIONS_SHEET`). Share each sheet with that email.
 - While the server runs, `instrumentation.ts` syncs registrations from the sheet every `REGISTRATIONS_SYNC_MINUTES` (default 5) via `lib/teamsnap/sync.ts`: replaces only when the tab changed, never on parse errors or a >50% drop; status in the `sync_status` table, shown on the Players page.
