@@ -28,18 +28,23 @@ export default function AppHeader({ user, tab }: { user: SessionUser; tab?: "use
         <LogoutButton />
       </div>
       {user.isDirector && (
-        <nav className="mx-auto flex max-w-3xl gap-1 px-4">
-          {tabs.map((t) => (
-            <Link
-              key={t.key}
-              href={t.href}
-              className={`border-b-2 px-3 py-2 text-sm font-medium ${
-                tab === t.key ? "border-blue-700 text-blue-700 dark:border-blue-400 dark:text-blue-400" : "border-transparent text-zinc-600 dark:text-zinc-400"
-              }`}
-            >
-              {t.label}
-            </Link>
-          ))}
+        <nav className="mx-auto max-w-3xl px-4 pb-3">
+          <div className="flex rounded-full bg-zinc-100 p-1 sm:inline-flex dark:bg-zinc-900">
+            {tabs.map((t) => (
+              <Link
+                key={t.key}
+                href={t.href}
+                aria-current={tab === t.key ? "page" : undefined}
+                className={`flex-1 rounded-full px-3 py-1.5 text-center sm:flex-none sm:px-6 text-sm font-medium transition-colors ${
+                  tab === t.key
+                    ? "bg-white text-zinc-900 shadow-sm ring-1 ring-zinc-200 dark:bg-zinc-700 dark:text-white dark:ring-zinc-600"
+                    : "text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white"
+                }`}
+              >
+                {t.label}
+              </Link>
+            ))}
+          </div>
         </nav>
       )}
     </header>
