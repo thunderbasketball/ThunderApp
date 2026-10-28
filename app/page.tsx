@@ -1,13 +1,12 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { currentUser, devBypass } from "@/lib/auth/server";
-import { listUsers } from "@/lib/users";
-import { RequestAccess } from "./HomeActions";
+import { currentContexts } from "@/lib/contexts-server";
 import AppHeader from "./AppHeader";
-import UserList from "./UserList";
+import { RequestAccess } from "./HomeActions";
 import { Notice } from "./ui";
 
-// Placeholder home until Phase 3 (roles & dashboards).
+// Home: go to the role the person used last (Director → Teams, or one of their teams).
 export default function Home() {
   return (
     <Suspense fallback={<p className="p-4 text-zinc-500">Loading…</p>}>
@@ -19,15 +18,15 @@ export default function Home() {
 async function HomeContent() {
   const user = await currentUser();
   if (!user) redirect(devBypass ? "/dev-login" : "/login");
+  const { active } = await currentContexts(user);
+  if (active) redirect(active.href);
 
   return (
     <>
-      <AppHeader user={user} tab="users" />
+      <AppHeader user={user} />
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6">
-        {user.isDirector ? (
-          <UserList users={await listUsers(user)} />
-        ) : user.hasThunderRole ? (
-          <p className="text-zinc-500 dark:text-zinc-400">You&apos;re logged in. Team dashboards arrive in Phase 3.</p>
+        {user.hasThunderRole ? (
+          <Notice tone="green">You&apos;re not on a team yet. The Director will add you.</Notice>
         ) : user.requestPending ? (
           <Notice tone="green">Request pending. The Director will review it.</Notice>
         ) : (

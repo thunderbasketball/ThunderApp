@@ -26,7 +26,7 @@ async function Coaches() {
 
   return (
     <>
-      <AppHeader user={user} tab="coaches" />
+      <AppHeader user={user} tab="coaches" context="director" />
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6">
         <PageTitle title="Volunteer coaches" subtitle="Parents who offered to coach at registration" />
         <Stats

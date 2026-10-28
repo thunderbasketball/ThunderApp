@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { currentUser, devBypass } from "@/lib/auth/server";
 import { db } from "@/lib/db";
 import { formatCell } from "@/lib/phone";
+import { currentContexts } from "@/lib/contexts-server";
 import { getTeam, personOptions, roleLabel } from "@/lib/teams";
 import AppHeader from "../../AppHeader";
 import { Chip, EmailLink, PersonRow, PhoneLink, card } from "../../ui";
@@ -26,14 +27,20 @@ async function Team({ params }: { params: PageProps<"/teams/[id]">["params"] }) 
   const deps = { pool: db, now: () => new Date() };
   const team = await getTeam(deps, user, id);
   if (!team) notFound();
+  // Shown as the role the person switched to: a team chip shows the team as that role sees it,
+  // even for the Director; otherwise the Director sees everything.
+  const { active } = await currentContexts(user);
+  const asDirector = user.isDirector && !(active?.key === `team:${team.id}` && team.myRoles.length > 0);
+  const canEditTeam = asDirector && team.canEditTeam;
+  const canEditStaff = asDirector || team.myRoles.includes("HeadCoach");
   // Only the Director picks from the full user and volunteer lists; a head coach adds people by cell number.
-  const options = user.isDirector ? await personOptions(deps, user) : null;
+  const options = asDirector ? await personOptions(deps, user) : null;
 
   return (
     <>
-      <AppHeader user={user} tab="teams" />
+      <AppHeader user={user} tab="teams" context={asDirector ? "director" : `team:${team.id}`} />
       <main className="mx-auto w-full max-w-xl flex-1 space-y-4 px-4 py-6">
-        {user.isDirector && (
+        {asDirector && (
           <Link href="/teams" className="text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-white">
             ← Teams
           </Link>
@@ -62,7 +69,7 @@ async function Team({ params }: { params: PageProps<"/teams/[id]">["params"] }) 
               <p className="mt-1 text-xs text-zinc-400">Created by {team.createdBy}</p>
             </div>
           </div>
-          {team.canEditTeam && (
+          {canEditTeam && (
             <TeamEditForm
               teamId={team.id}
               initial={{ gender: team.gender, grades: team.grades, level: team.level, practiceLocations: team.practiceLocations.join(", ") }}
@@ -92,7 +99,7 @@ async function Team({ params }: { params: PageProps<"/teams/[id]">["params"] }) 
                 )}
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-xs">Added by {s.addedBy}</p>
-                  {team.canEditStaff && (s.role !== "HeadCoach" || user.isDirector) && (
+                  {canEditStaff && (s.role !== "HeadCoach" || asDirector) && (
                     <RemoveStaffButton teamId={team.id} coachId={s.coachId} role={s.role} label={`${s.firstName} ${s.lastName}`} />
                   )}
                 </div>
@@ -101,12 +108,12 @@ async function Team({ params }: { params: PageProps<"/teams/[id]">["params"] }) 
           </ul>
         </section>
 
-        {team.canEditStaff && (
+        {canEditStaff && (
           <AddStaffForm
             teamId={team.id}
             gender={team.gender}
             grades={team.grades}
-            canSetHead={user.isDirector}
+            canSetHead={asDirector}
             hasHead={team.staff.some((s) => s.role === "HeadCoach")}
             users={options?.users ?? []}
             volunteers={options?.volunteers ?? []}

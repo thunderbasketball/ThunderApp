@@ -34,7 +34,7 @@ async function Teams() {
 
   return (
     <>
-      <AppHeader user={user} tab="teams" />
+      <AppHeader user={user} tab="teams" context="director" />
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6">
         <div className="flex items-start justify-between gap-3">
           <PageTitle title="Teams" subtitle="Grouped by Comp or Rec, then gender; youngest grade first" />
@@ -75,7 +75,7 @@ async function Teams() {
                         <p>{gradesLabel(t.grades)}</p>
                         {t.headCoach ? (
                           <p>
-                            Head coach: {t.headCoach.first} {t.headCoach.last} · {formatCell(t.headCoach.cell)}
+                            Head coach: {t.headCoach.first} {t.headCoach.last} · <span className="whitespace-nowrap">{formatCell(t.headCoach.cell)}</span>
                           </p>
                         ) : (
                           <p className="text-amber-700 dark:text-amber-400">No head coach yet</p>

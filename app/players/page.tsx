@@ -30,7 +30,7 @@ async function Players() {
 
   return (
     <>
-      <AppHeader user={user} tab="players" />
+      <AppHeader user={user} tab="players" context="director" />
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6">
         <PageTitle
           title="Registered players"

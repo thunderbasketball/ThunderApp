@@ -133,6 +133,12 @@ describe("editing teams and staff", () => {
     expect(await updateTeam(deps(), head, teamId, { gender: "Girls", grades: ["4"], level: "REC", practiceLocations: "" })).toMatchObject({ ok: false });
   });
 
+  it("other staff can view the team but not change it", async () => {
+    await addStaff(deps(), director, teamId, { role: "TeamParent", person: "user:5550002" });
+    expect(await getTeam(deps(), other, teamId)).toMatchObject({ myRoles: ["TeamParent"], canEditStaff: false, canEditTeam: false });
+    expect(await addStaff(deps(), other, teamId, { role: "Manager", person: "user:5550002" })).toMatchObject({ ok: false });
+  });
+
   it("anyone else can't see or change the team", async () => {
     expect(await getTeam(deps(), other, teamId)).toBeNull();
     expect(await addStaff(deps(), other, teamId, { role: "TeamParent", person: "user:5550002" })).toMatchObject({ ok: false, message: /Director or this team's head coach/ });

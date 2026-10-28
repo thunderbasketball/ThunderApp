@@ -24,7 +24,7 @@ async function NewTeam() {
   const options = await personOptions({ pool: db, now: () => new Date() }, user);
   return (
     <>
-      <AppHeader user={user} tab="teams" />
+      <AppHeader user={user} tab="teams" context="director" />
       <main className="mx-auto w-full max-w-xl flex-1 px-4 py-6">
         <Link href="/teams" className="text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-white">
           ← Teams

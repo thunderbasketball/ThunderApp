@@ -75,13 +75,14 @@ export type StaffMember = {
 
 export type TeamDetail = Omit<TeamListItem, "headCoach"> & {
   staff: StaffMember[];
+  myRoles: Role[]; // the viewer's own roles on this team
   canEditTeam: boolean;
   canEditStaff: boolean;
 };
 
 const roleOrder = `array_position(array['HeadCoach','AsstCoach','Manager','TeamParent'], s.role)`;
 
-// The Director, or this team's head coach. Null if the viewer can't see the team.
+// The Director, or anyone on this team's staff. Null if the viewer can't see the team.
 export async function getTeam(deps: Deps, viewer: SessionUser, id: string): Promise<TeamDetail | null> {
   if (!/^\d{1,18}$/.test(id)) return null;
   const t = await deps.pool.query<Omit<TeamListItem, "headCoach">>(
@@ -98,12 +99,15 @@ export async function getTeam(deps: Deps, viewer: SessionUser, id: string): Prom
      order by ${roleOrder}, lower(u.last_name), lower(u.first_name)`,
     [id],
   );
-  const isHead = staff.rows.some((s) => s.role === "HeadCoach" && s.coachId === viewer.coachId);
-  if (!viewer.isDirector && !isHead) return null;
+  // Anyone on the team's staff can view it; the Director sees every team.
+  const myRoles = staff.rows.filter((s) => s.coachId === viewer.coachId).map((s) => s.role);
+  const isHead = myRoles.includes("HeadCoach");
+  if (!viewer.isDirector && !myRoles.length) return null;
   return {
     ...t.rows[0],
     grades: sortGrades(t.rows[0].grades),
     staff: staff.rows,
+    myRoles,
     canEditTeam: viewer.isDirector,
     canEditStaff: viewer.isDirector || isHead,
   };
