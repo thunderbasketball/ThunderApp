@@ -2,14 +2,17 @@
 
 import { currentUser } from "@/lib/auth/server";
 import { db } from "@/lib/db";
+import * as rosters from "@/lib/rosters";
 import * as teams from "@/lib/teams";
 import type { CreateTeamInput, CreateTeamResult, UpdateTeamInput } from "@/lib/teams";
 
 const deps = { pool: db, now: () => new Date() };
-type Result = { ok: true } | { ok: false; message: string };
+type Result = ({ ok: true } & object) | { ok: false; message: string };
 
 // Session and role are checked again inside each lib/teams function.
-async function guarded<T extends Result>(fn: (user: NonNullable<Awaited<ReturnType<typeof currentUser>>>) => Promise<T>): Promise<T | { ok: false; message: string }> {
+async function guarded<T extends Result>(
+  fn: (user: NonNullable<Awaited<ReturnType<typeof currentUser>>>) => Promise<T>,
+): Promise<T | { ok: false; message: string }> {
   const user = await currentUser();
   if (!user) return { ok: false, message: "Please log in again." };
   try {
@@ -34,4 +37,11 @@ export async function addStaff(teamId: string, input: { role: unknown; person: u
 
 export async function removeStaff(teamId: string, input: { coachId: unknown; role: unknown }) {
   return guarded((u) => teams.removeStaff(deps, u, String(teamId), input));
+}
+
+export async function addPlayers(teamId: string, ids: string[]) {
+  return guarded((u) => rosters.addPlayers(deps, u, String(teamId), ids));
+}
+export async function removePlayer(teamId: string, registrantId: string) {
+  return guarded((u) => rosters.removePlayer(deps, u, String(teamId), String(registrantId)));
 }

@@ -6,10 +6,12 @@ import { db } from "@/lib/db";
 import { formatCell } from "@/lib/phone";
 import { currentContexts } from "@/lib/contexts-server";
 import { upcomingForTeam } from "@/lib/practice/schedule";
+import { listRoster, rosterCandidates } from "@/lib/rosters";
 import { TZ } from "@/lib/time";
 import { getTeam, personOptions, roleLabel } from "@/lib/teams";
 import AppHeader from "../../AppHeader";
 import { Chip, EmailLink, PersonRow, PhoneLink, card } from "../../ui";
+import { AddPlayersButton, RemovePlayerButton } from "./RosterTools";
 import { AddStaffButton, RemoveStaffButton, TeamEditForm } from "./TeamEditor";
 
 export default function TeamPage({ params }: PageProps<"/teams/[id]">) {
@@ -37,7 +39,12 @@ async function Team({ params }: { params: PageProps<"/teams/[id]">["params"] }) 
   const canEditStaff = asDirector || team.myRoles.includes("HeadCoach");
   // Only the Director picks from the full user and volunteer lists; a head coach adds people by cell number.
   const options = asDirector ? await personOptions(deps, user) : null;
-  const practices = await upcomingForTeam(deps, team.id);
+  const [practices, roster, candidates] = await Promise.all([
+    upcomingForTeam(deps, team.id),
+    listRoster(deps, user, team.id),
+    asDirector ? rosterCandidates(deps, user, team.id) : [],
+  ]);
+  const players = roster ?? [];
   const canBook = asDirector || team.myRoles.some((r) => r !== "TeamParent");
 
   return (
@@ -126,6 +133,33 @@ async function Team({ params }: { params: PageProps<"/teams/[id]">["params"] }) 
                   )}
                 </div>
               </PersonRow>
+            ))}
+          </ul>
+        </section>
+        <section className={`${card} overflow-hidden`}>
+          <div className="flex items-center justify-between gap-3 px-4 pt-4 pb-3">
+            <h2 className="font-semibold">Players ({players.length})</h2>
+            {asDirector && <AddPlayersButton teamId={team.id} candidates={candidates} />}
+          </div>
+          {!players.length && (
+            <p className="px-4 pb-4 text-sm text-zinc-500">
+              {asDirector ? "No players yet. Tap “+ Add players”." : "No players on the roster yet."}
+            </p>
+          )}
+          <ul className="divide-y divide-zinc-100 border-t border-zinc-100 dark:divide-white/5 dark:border-white/5">
+            {players.map((p) => (
+              <li key={p.registrantId} className="flex items-center justify-between gap-3 px-4 py-2.5">
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-medium">
+                    {p.firstName} <span className="font-semibold">{p.lastName}</span>
+                  </span>
+                  <span className="block text-xs text-zinc-400">
+                    Grade {p.grade} · Rostered by {p.rosteredBy}
+                    {!p.registered && <span className="text-amber-700 dark:text-amber-400"> · no longer in registrations</span>}
+                  </span>
+                </span>
+                {asDirector && <RemovePlayerButton teamId={team.id} registrantId={p.registrantId} name={`${p.firstName} ${p.lastName}`} />}
+              </li>
             ))}
           </ul>
         </section>
