@@ -64,7 +64,7 @@ async function Practice({ searchParams }: { searchParams: PageProps<"/practice">
               ← {grid.team?.name}
             </Link>
             <div className="mt-2">
-              <PageTitle title="Book practices" subtitle="Open slots at your team's gyms, plus your team's practices" />
+              <PageTitle title="Book practices" subtitle="Every practice at your team's gyms. Book open slots for your team." />
             </div>
           </>
         )}

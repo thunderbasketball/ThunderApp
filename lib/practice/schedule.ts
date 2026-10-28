@@ -1,8 +1,8 @@
 // Reading the practice schedule.
 // The week grid: one Mon–Sun week, by day, then gym, then start time, then court.
 //   Director view: every slot, with Release / Block / Unblock / Book.
-//   Team view: open slots at the team's practice gyms plus the team's own bookings, each open slot
-//   marked bookable or not using the same limit rule the server enforces.
+//   Team view: the team's practice gyms, showing open slots, which teams practice when, and blocked times
+//   (not who booked). Each open slot is marked bookable or not using the same limit rule the server enforces.
 import type { Pool } from "pg";
 import type { SessionUser } from "../auth/service";
 import { TZ, localParts, weekOf, zonedTime } from "../time";
@@ -126,13 +126,14 @@ export async function weekGrid(
     const past = row.startsAt <= now;
     const mine = !!team && row.teamId === team.id;
     if (team) {
-      // Coaches see open slots at their practice gyms, plus their own team's bookings.
+      // Coaches see their practice gyms: open slots, which teams practice when, and blocked times.
+      // Past slots only for their own team.
       const atTeamGym = !team.locations.length || team.locations.includes(row.gym.toLowerCase());
-      if (!mine && (row.teamId || row.blackout || past || !atTeamGym)) continue;
+      if (!mine && (past || !atTeamGym)) continue;
     }
     let canBook = false;
     let reason: string | null = null;
-    if (team && !mine) {
+    if (team && !mine && !row.teamId && !row.blackout) {
       const check = limitCheck(team.booked, row.startsAt, now);
       // Same rule as a coach, even for the Director, in a team's view.
       canBook = team.canBookRole && check.ok;
@@ -162,7 +163,7 @@ export async function weekGrid(
       court: row.court,
       teamId: row.teamId,
       team: row.team,
-      bookedBy: row.bookedBy,
+      bookedBy: team ? null : row.bookedBy, // who booked is shown to the Director only
       blackout: row.blackout,
       note: row.note,
       past,

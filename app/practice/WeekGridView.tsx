@@ -105,7 +105,7 @@ export default function WeekGridView({
         );
     } else if (s.team) {
       text = (
-        <span className="text-violet-700 dark:text-violet-300">
+        <span className={mode === "team" && !s.mine ? "text-zinc-500 dark:text-zinc-400" : "text-violet-700 dark:text-violet-300"}>
           {s.court}: {s.team}
           {s.mine && mode === "team" && <span className="font-normal"> (your team)</span>}
           {s.bookedBy && <span className="block text-xs font-normal text-violet-600/80 dark:text-violet-300/70">by {s.bookedBy}</span>}

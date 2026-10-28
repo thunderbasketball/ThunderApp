@@ -71,17 +71,21 @@ describe("week grid", () => {
     expect(g.label).toBe("Week of 11/9 – 11/15/2026");
   });
 
-  it("a team sees open slots at its gyms plus its own bookings; others' bookings are hidden", async () => {
+  it("a team sees its gyms: open slots and which teams practice when, but not who booked", async () => {
     await bookSlot(deps(), director, { slotId: await slotAt("Action Church", "North", 10), teamId: other });
     const g = await weekGrid(deps(), head, week, { teamId: team });
     expect(g.team).toMatchObject({ name: "4G A", booked: 0, status: "No practice booked this week. You can book 1." });
     expect(lines(g)).toEqual([
       "Mon, 11/9 Action Church North BOOK",
       "Mon, 11/9 Action Church South BOOK",
-      "Tue, 11/10 Action Church South BOOK", // North is another team's: hidden. Heritage isn't an approved gym.
+      "Tue, 11/10 Action Church North 5G B", // another team's practice is shown. Heritage isn't an approved gym.
+      "Tue, 11/10 Action Church South BOOK",
       "Thu, 11/12 Action Church North BOOK",
       "Thu, 11/12 Action Church South BOOK",
     ]);
+    const all = g.days.flatMap((d) => d.gyms.flatMap((x) => x.times.flatMap((t) => t.slots)));
+    expect(all.every((s) => s.bookedBy === null)).toBe(true);
+    expect(all.find((s) => s.team === "5G B")).toMatchObject({ canBook: false, mine: false });
   });
 
   it("after one booking, only slots within 72 hours stay bookable", async () => {
