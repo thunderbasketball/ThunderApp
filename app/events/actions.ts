@@ -3,6 +3,7 @@
 import { currentUser } from "@/lib/auth/server";
 import { db } from "@/lib/db";
 import * as ev from "@/lib/events";
+import * as pa from "@/lib/practice-attendance";
 import type { EventInput, PlayerFilter } from "@/lib/events";
 
 const deps = { pool: db, now: () => new Date() };
@@ -42,4 +43,10 @@ export async function addEventType(name: string) {
 }
 export async function removeEventType(name: string) {
   return guarded((u) => ev.removeEventType(deps, u, name));
+}
+export async function setPracticeStatus(input: { slotId: unknown; registrantId: unknown; status: unknown }) {
+  return guarded(async (u) => {
+    const r = await pa.setPracticeStatus(deps, u, input);
+    return r.ok ? { ...r, updatedAt: r.updatedAt?.toISOString() ?? null } : r;
+  });
 }

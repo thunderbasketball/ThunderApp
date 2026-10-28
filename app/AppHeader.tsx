@@ -6,11 +6,24 @@ import type { SessionUser } from "@/lib/auth/service";
 import { currentContexts } from "@/lib/contexts-server";
 import { db } from "@/lib/db";
 import { myEventCount } from "@/lib/events";
+import { myPracticesToday } from "@/lib/practice-attendance";
+import { localParts, zonedTime } from "@/lib/time";
 import { syncIfStale } from "@/lib/teamsnap/scheduler";
 import { LogoutButton } from "./HomeActions";
 import { Avatar } from "./ui";
 
 type Tab = "teams" | "practice" | "events" | "users" | "players" | "coaches";
+
+// Events the person runs check-in for (from yesterday on), plus their teams' practices today.
+async function checkInsFor(user: SessionUser): Promise<number> {
+  const deps = { pool: db, now: () => new Date() };
+  const t = localParts(new Date());
+  const start = zonedTime(t.year, t.month, t.day);
+  const next = new Date(Date.UTC(t.year, t.month - 1, t.day + 1));
+  const end = zonedTime(next.getUTCFullYear(), next.getUTCMonth() + 1, next.getUTCDate());
+  const [events, practices] = await Promise.all([myEventCount(deps, user), myPracticesToday(deps, user, start, end)]);
+  return events + practices;
+}
 
 // Sticky top bar: logo, the user, one chip per role to switch between them, and the Director tabs.
 // `context` is the role this page is shown as ("director" or "team:<id>"); it highlights that chip.
@@ -19,7 +32,7 @@ export default async function AppHeader({ user, tab, context }: { user: SessionU
   const [{ contexts }, unread, myEvents] = await Promise.all([
     currentContexts(user),
     unreadCount(deps, user),
-    user.isDirector ? 0 : myEventCount(deps, user),
+    user.isDirector ? 0 : checkInsFor(user),
   ]);
   // Backup for the sheet timer: after this page is sent, refresh registrations if the last check is stale.
   after(syncIfStale);

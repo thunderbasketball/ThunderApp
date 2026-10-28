@@ -177,10 +177,14 @@ async function Team({ params }: { params: PageProps<"/teams/[id]">["params"] }) 
           <ul className="divide-y divide-zinc-100 border-t border-zinc-100 dark:divide-white/5 dark:border-white/5">
             {practices.map((p) => (
               <li key={p.id} className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm">
-                <span className="font-semibold">
+                <Link
+                  href={`/events/practice/${p.id}`}
+                  className="font-semibold text-thunder-blue underline-offset-2 hover:underline dark:text-blue-400"
+                >
                   {p.startsAt.toLocaleDateString("en-US", { timeZone: TZ, weekday: "short", month: "numeric", day: "numeric" })} ·{" "}
                   {p.startsAt.toLocaleTimeString("en-US", { timeZone: TZ, hour: "numeric", minute: "2-digit" })}
-                </span>
+                  <span className="block text-xs font-normal">✓ Attendance</span>
+                </Link>
                 <span className="text-right text-zinc-500">
                   {p.gym} {p.court}
                   {p.bookedBy && <span className="block text-xs text-zinc-400">by {p.bookedBy}</span>}

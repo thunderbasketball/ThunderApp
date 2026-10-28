@@ -4,32 +4,75 @@ import { redirect } from "next/navigation";
 import { currentUser, devBypass } from "@/lib/auth/server";
 import { currentContexts } from "@/lib/contexts-server";
 import { db } from "@/lib/db";
-import { listEvents, type EventSummary } from "@/lib/events";
+import { listEvents } from "@/lib/events";
+import { listPractices } from "@/lib/practice-attendance";
 import { localParts, zonedTime } from "@/lib/time";
 import AppHeader from "../AppHeader";
 import { PageTitle, card } from "../ui";
 import { eventWhen } from "./format";
 
-export default function EventsPage() {
+export default function EventsPage({ searchParams }: PageProps<"/events">) {
   return (
     <Suspense fallback={<p className="p-4 text-zinc-500">Loading…</p>}>
-      <Events />
+      <Events searchParams={searchParams} />
     </Suspense>
   );
 }
 
-async function Events() {
+// One row on the list: an event, or a team's booked practice.
+type Item = {
+  key: string;
+  href: string;
+  name: string;
+  startsAt: Date;
+  where: string | null;
+  total: number;
+  here: number;
+  absent: number;
+  note: string | null;
+  practice: boolean;
+};
+
+async function Events({ searchParams }: { searchParams: PageProps<"/events">["searchParams"] }) {
   const user = await currentUser();
   if (!user) redirect(devBypass ? "/dev-login" : "/login");
-  const events = await listEvents({ pool: db, now: () => new Date() }, user);
-  if (!user.isDirector && !events.length) redirect("/");
-  const { active } = await currentContexts(user);
+  const deps = { pool: db, now: () => new Date() };
+  const showPractices = (await searchParams).practices !== "off";
+  const [events, practices, { active }] = await Promise.all([listEvents(deps, user), listPractices(deps, user), currentContexts(user)]);
+  if (!user.isDirector && !events.length && !practices.length) redirect("/");
 
-  // Today's and later events first (soonest first); earlier ones below, newest first.
+  const items: Item[] = [
+    ...events.map((e) => ({
+      key: `e${e.id}`,
+      href: `/events/${e.id}`,
+      name: e.name,
+      startsAt: e.startsAt,
+      where: e.location,
+      total: e.total,
+      here: e.here,
+      absent: e.absent,
+      note: e.staff.length ? `Check-in: ${e.staff.join(", ")}` : null,
+      practice: false,
+    })),
+    ...(showPractices ? practices : []).map((p) => ({
+      key: `p${p.slotId}`,
+      href: `/events/practice/${p.slotId}`,
+      name: `Practice – ${p.teamName}`,
+      startsAt: p.startsAt,
+      where: `${p.gym} ${p.court}`,
+      total: p.total,
+      here: p.here,
+      absent: p.absent,
+      note: p.total ? null : "No roster yet",
+      practice: true,
+    })),
+  ].sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime() || a.name.localeCompare(b.name));
+
+  // Today's and later first (soonest first); earlier ones below, newest first.
   const t = localParts(new Date());
   const today = zonedTime(t.year, t.month, t.day);
-  const upcoming = events.filter((e) => e.startsAt >= today);
-  const past = events.filter((e) => e.startsAt < today).reverse();
+  const upcoming = items.filter((e) => e.startsAt >= today);
+  const past = items.filter((e) => e.startsAt < today).reverse();
 
   return (
     <>
@@ -38,7 +81,9 @@ async function Events() {
         <div className="flex items-start justify-between gap-3">
           <PageTitle
             title="Events"
-            subtitle={user.isDirector ? "Tryouts, evaluations and clinics with player check-in" : "Events you run check-in for"}
+            subtitle={
+              user.isDirector ? "Events and team practices with player check-in" : "Your team practices and the events you run check-in for"
+            }
           />
           {user.isDirector && (
             <Link
@@ -49,18 +94,33 @@ async function Events() {
             </Link>
           )}
         </div>
-        {!events.length && <p className="text-zinc-500">No events yet. Tap “+ New event” to create one.</p>}
+        <Link
+          href={showPractices ? "/events?practices=off" : "/events"}
+          role="switch"
+          aria-checked={showPractices}
+          className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-zinc-700 dark:text-zinc-300"
+        >
+          <span
+            className={`flex size-5 items-center justify-center rounded-md text-xs font-bold text-white ring-1 ${
+              showPractices ? "bg-thunder-blue ring-thunder-blue" : "bg-white ring-zinc-300 dark:bg-zinc-900 dark:ring-zinc-600"
+            }`}
+          >
+            {showPractices && "✓"}
+          </span>
+          Show practices ({practices.length})
+        </Link>
+        {!items.length && <p className="text-zinc-500">Nothing here yet.{user.isDirector && " Tap “+ New event” to create one."}</p>}
         <div className="space-y-3">
           {upcoming.map((e) => (
-            <EventCard key={e.id} e={e} />
+            <ItemCard key={e.key} e={e} />
           ))}
         </div>
         {past.length > 0 && (
           <details className="mt-6">
-            <summary className="cursor-pointer font-semibold text-zinc-500">Past events ({past.length})</summary>
+            <summary className="cursor-pointer font-semibold text-zinc-500">Past ({past.length})</summary>
             <div className="mt-3 space-y-3">
               {past.map((e) => (
-                <EventCard key={e.id} e={e} />
+                <ItemCard key={e.key} e={e} />
               ))}
             </div>
           </details>
@@ -70,10 +130,13 @@ async function Events() {
   );
 }
 
-function EventCard({ e }: { e: EventSummary }) {
+function ItemCard({ e }: { e: Item }) {
   const unknown = e.total - e.here - e.absent;
   return (
-    <Link href={`/events/${e.id}`} className={`${card} block p-4 hover:bg-zinc-50 dark:hover:bg-white/5`}>
+    <Link
+      href={e.href}
+      className={`${card} block p-4 hover:bg-zinc-50 dark:hover:bg-white/5 ${e.practice ? "border-l-4 border-l-emerald-500" : "border-l-4 border-l-thunder-blue"}`}
+    >
       <div className="flex items-start justify-between gap-2">
         <h2 className="font-semibold">{e.name}</h2>
         <span className="shrink-0 text-sm font-medium tabular-nums">
@@ -83,9 +146,9 @@ function EventCard({ e }: { e: EventSummary }) {
       </div>
       <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">
         {eventWhen(e.startsAt)}
-        {e.location && ` · ${e.location}`} · {e.total} players
+        {e.where && ` · ${e.where}`} · {e.total} players
       </p>
-      {e.staff.length > 0 && <p className="mt-0.5 text-xs text-zinc-400">Check-in: {e.staff.join(", ")}</p>}
+      {e.note && <p className="mt-0.5 text-xs text-zinc-400">{e.note}</p>}
     </Link>
   );
 }

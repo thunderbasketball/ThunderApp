@@ -6,7 +6,7 @@ import type { Attendee, Status } from "@/lib/events";
 import { gradeLabel } from "@/lib/grades";
 import { TZ } from "@/lib/time";
 import { Toast } from "../../client-ui";
-import { setStatus } from "../actions";
+import { setPracticeStatus, setStatus } from "../actions";
 
 const NEXT: Record<Status, Status> = { unknown: "here", here: "absent", absent: "unknown" };
 const LOOK: Record<Status, { mark: string; cls: string; label: string }> = {
@@ -24,7 +24,8 @@ const time = (d: Date | string) => new Date(d).toLocaleTimeString("en-US", { tim
 
 // Tap a player's circle: ? → ✓ → ✗ → ?. Shows the change at once and saves it; other check-in people's taps
 // show up within a few seconds.
-export default function CheckIn({ eventId, players }: { eventId: string; players: Attendee[] }) {
+// target: an event, or a team practice (by its slot).
+export default function CheckIn({ target, players }: { target: { kind: "event" | "practice"; id: string }; players: Attendee[] }) {
   const router = useRouter();
   const [, startRefresh] = useTransition();
   // Taps not yet confirmed by a refresh: registrantId → status.
@@ -49,7 +50,10 @@ export default function CheckIn({ eventId, players }: { eventId: string; players
     setPending((m) => ({ ...m, [p.registrantId]: next }));
     const prev = queue.current.get(p.registrantId) ?? Promise.resolve();
     const job = prev.then(async () => {
-      const r = await setStatus({ eventId, registrantId: p.registrantId, status: next });
+      const r =
+        target.kind === "event"
+          ? await setStatus({ eventId: target.id, registrantId: p.registrantId, status: next })
+          : await setPracticeStatus({ slotId: target.id, registrantId: p.registrantId, status: next });
       if (queue.current.get(p.registrantId) !== job) return; // a newer tap is on its way
       queue.current.delete(p.registrantId);
       if (!r.ok) setError(`${p.firstName} ${p.lastName}: ${r.message}`);
@@ -108,7 +112,13 @@ export default function CheckIn({ eventId, players }: { eventId: string; players
         />
       </div>
 
-      {!players.length && <p className="mt-4 text-zinc-500">No players match this event yet.</p>}
+      {!players.length && (
+        <p className="mt-4 text-zinc-500">
+          {target.kind === "event"
+            ? "No players match this event yet."
+            : "No players on this team's roster yet. The Director adds them on the team page."}
+        </p>
+      )}
       {players.length > 0 && !shown.length && <p className="mt-4 text-zinc-500">Nobody here with that filter.</p>}
       <div className="mt-2 space-y-4">
         {groups.map((g) => (

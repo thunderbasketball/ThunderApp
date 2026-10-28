@@ -42,7 +42,7 @@ async function Event({ params }: { params: PageProps<"/events/[id]">["params"] }
         </p>
         {event.notes && <p className="mt-2 text-sm whitespace-pre-wrap">{event.notes}</p>}
         {user.isDirector && <EventTools id={event.id} name={event.name} />}
-        <CheckIn eventId={event.id} players={event.players} />
+        <CheckIn target={{ kind: "event", id: event.id }} players={event.players} />
       </main>
     </>
   );
