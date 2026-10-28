@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { currentUser, devBypass } from "@/lib/auth/server";
 import { db } from "@/lib/db";
-import { staffChoices } from "@/lib/events";
+import { listEventTypes, staffChoices } from "@/lib/events";
 import { listGyms } from "@/lib/practice/schedule";
 import AppHeader from "../../AppHeader";
 import { PageTitle } from "../../ui";
@@ -22,7 +22,7 @@ async function NewEvent() {
   if (!user) redirect(devBypass ? "/dev-login" : "/login");
   if (!user.isDirector) redirect("/events");
   const deps = { pool: db, now: () => new Date() };
-  const [people, gyms] = await Promise.all([staffChoices(deps, user), listGyms(deps)]);
+  const [people, gyms, types] = await Promise.all([staffChoices(deps, user), listGyms(deps), listEventTypes(deps)]);
   return (
     <>
       <AppHeader user={user} tab="events" context="director" />
@@ -31,9 +31,9 @@ async function NewEvent() {
           ← Events
         </Link>
         <div className="mt-2">
-          <PageTitle title="New event" subtitle="Players are picked from registrations by gender and grade" />
+          <PageTitle title="New event" subtitle="Pick the type, gender and grades; the name is made from them" />
         </div>
-        <NewEventForm people={people} gyms={gyms.filter((g) => g.active).map((g) => g.name)} />
+        <NewEventForm people={people} gyms={gyms.filter((g) => g.active).map((g) => g.name)} types={types} />
       </main>
     </>
   );

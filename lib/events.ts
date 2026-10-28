@@ -3,6 +3,7 @@
 import type { Pool } from "pg";
 import type { SessionUser } from "./auth/service";
 import { withTx } from "./sql";
+import { GENDER_CHOICES, eventName, genderChoiceOf, gendersOf } from "./event-names";
 import { GRADES } from "./team-names";
 import { zonedTime } from "./time";
 
@@ -45,8 +46,10 @@ export async function countMatching(deps: Deps, viewer: SessionUser, f: PlayerFi
   return r.rows[0].n;
 }
 
-export type EventInput = PlayerFilter & {
-  name: unknown;
+export type EventInput = {
+  kind: unknown; // an event type, e.g. "Tryouts"
+  gender: unknown; // Boys, Girls or Coed
+  grades: unknown;
   date: unknown; // YYYY-MM-DD
   time: unknown; // HH:MM, 24-hour, Eastern
   location?: unknown;
@@ -62,9 +65,10 @@ function cleanInput(input: EventInput) {
           .trim()
           .slice(0, max + 1)
       : "";
-  const name = text(input.name, 80).replace(/\s+/g, " ");
-  if (!name) throw new UserError("Give the event a name.");
-  if (name.length > 80) throw new UserError("Keep the name to 80 characters.");
+  const kind = typeof input.kind === "string" ? input.kind.trim() : "";
+  if (!kind) throw new UserError("Pick an event type.");
+  const gender = GENDER_CHOICES.find((g) => g === input.gender);
+  if (!gender) throw new UserError("Pick Boys, Girls, or Coed.");
   const date = typeof input.date === "string" ? input.date.match(/^(\d{4})-(\d{2})-(\d{2})$/) : null;
   const time = typeof input.time === "string" ? input.time.match(/^([01]\d|2[0-3]):([0-5]\d)$/) : null;
   if (!date) throw new UserError("Pick a date.");
@@ -74,14 +78,22 @@ function cleanInput(input: EventInput) {
   if (location.length > 80) throw new UserError("Keep the location to 80 characters.");
   const notes = text(input.notes, 1000);
   if (notes.length > 1000) throw new UserError("Keep the notes to 1,000 characters.");
-  const genders = pick(input.genders, GENDERS);
+  const genders = gendersOf(gender);
   const grades = pick(input.grades, GRADES);
-  if (!genders.length) throw new UserError("Pick Boys, Girls, or both.");
   if (!grades.length) throw new UserError("Pick at least one grade.");
   const staff = Array.isArray(input.staff)
     ? [...new Set(input.staff.filter((s): s is string => typeof s === "string" && /^\d{7}$/.test(s)))]
     : [];
-  return { name, startsAt, location: location || null, notes: notes || null, genders, grades, staff };
+  return {
+    kind,
+    name: eventName(kind, gender, grades),
+    startsAt,
+    location: location || null,
+    notes: notes || null,
+    genders,
+    grades,
+    staff,
+  };
 }
 
 export async function createEvent(deps: Deps, viewer: SessionUser, input: EventInput): Promise<Result<{ id: string; players: number }>> {
@@ -89,12 +101,16 @@ export async function createEvent(deps: Deps, viewer: SessionUser, input: EventI
   return run(async () => {
     const e = cleanInput(input);
     return withTx(deps.pool, async (q) => {
+      const t = await q.query<{ name: string }>("select name from event_types where lower(name) = lower($1)", [e.kind]);
+      if (!t.rows[0]) throw new UserError("That event type no longer exists. Pick again.");
+      e.kind = t.rows[0].name;
+      e.name = eventName(e.kind, genderChoiceOf(e.genders)!, e.grades);
       const ok = await q.query<{ coach_id: string }>("select coach_id from users where active and coach_id = any($1)", [e.staff]);
       if (ok.rows.length !== e.staff.length) throw new UserError("One of the check-in people is no longer active. Pick again.");
       const ins = await q.query<{ id: string }>(
-        `insert into events (name, starts_at, location, notes, genders, grades, created_by, created_at)
-         values ($1, $2, $3, $4, $5, $6, $7, $8) returning id::text`,
-        [e.name, e.startsAt, e.location, e.notes, e.genders, e.grades, by(viewer), deps.now()],
+        `insert into events (name, kind, starts_at, location, notes, genders, grades, created_by, created_at)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9) returning id::text`,
+        [e.name, e.kind, e.startsAt, e.location, e.notes, e.genders, e.grades, by(viewer), deps.now()],
       );
       const id = ins.rows[0].id;
       await q.query("insert into event_staff (event_id, coach_id, added_by) select $1, unnest($2::text[]), $3", [id, e.staff, by(viewer)]);
@@ -250,4 +266,33 @@ export async function staffChoices(deps: Deps, viewer: SessionUser): Promise<{ i
      order by lower(u.last_name), lower(u.first_name)`,
   );
   return r.rows;
+}
+
+// ---- Quick setup: event types ----
+
+export async function listEventTypes(deps: Deps): Promise<string[]> {
+  const r = await deps.pool.query<{ name: string }>("select name from event_types order by created_at, lower(name)");
+  return r.rows.map((t) => t.name);
+}
+
+export async function addEventType(deps: Deps, viewer: SessionUser, nameInput: unknown): Promise<Result<{ name: string }>> {
+  if (!viewer.isDirector) return directorOnly;
+  const name = typeof nameInput === "string" ? nameInput.trim().replace(/\s+/g, " ") : "";
+  if (!name) return { ok: false, message: "Type a name for the new event type." };
+  if (name.length > 40) return { ok: false, message: "Keep it to 40 characters." };
+  if (!/^[A-Za-z0-9][A-Za-z0-9 &'/-]*$/.test(name)) return { ok: false, message: "Use letters, numbers, spaces, & ' / or -." };
+  const r = await deps.pool.query("insert into event_types (name, created_by, created_at) values ($1, $2, $3) on conflict do nothing", [
+    name,
+    by(viewer),
+    deps.now(),
+  ]);
+  return r.rowCount ? { ok: true, name } : { ok: false, message: `"${name}" is already an event type.` };
+}
+
+// Removing a type only takes it off the quick list; events already made from it keep their name.
+export async function removeEventType(deps: Deps, viewer: SessionUser, nameInput: unknown): Promise<Result> {
+  if (!viewer.isDirector) return directorOnly;
+  if (typeof nameInput !== "string") return { ok: false, message: "That event type no longer exists." };
+  const r = await deps.pool.query("delete from event_types where name = $1", [nameInput]);
+  return r.rowCount ? { ok: true } : { ok: false, message: "That event type no longer exists." };
 }

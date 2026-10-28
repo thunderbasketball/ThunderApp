@@ -37,3 +37,9 @@ export async function refreshPlayers(eventId: string) {
 export async function deleteEvent(eventId: string) {
   return guarded((u) => ev.deleteEvent(deps, u, String(eventId)));
 }
+export async function addEventType(name: string) {
+  return guarded((u) => ev.addEventType(deps, u, name));
+}
+export async function removeEventType(name: string) {
+  return guarded((u) => ev.removeEventType(deps, u, name));
+}

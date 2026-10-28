@@ -1,6 +1,19 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { SessionUser } from "./auth/service";
-import { countMatching, createEvent, deleteEvent, getEvent, listEvents, myEventCount, refreshPlayers, setStatus } from "./events";
+import { eventName, gradesText } from "./event-names";
+import {
+  addEventType,
+  countMatching,
+  createEvent,
+  deleteEvent,
+  getEvent,
+  listEvents,
+  listEventTypes,
+  myEventCount,
+  refreshPlayers,
+  removeEventType,
+  setStatus,
+} from "./events";
 import { createTestDb } from "./testing/db";
 
 const person = (coachId: string, firstName: string, isDirector = false): SessionUser => ({
@@ -27,11 +40,11 @@ describe("events", () => {
   const now = new Date("2026-10-28T12:00:00Z");
   const deps = () => ({ pool: db.pool, now: () => now });
   const tryouts = {
-    name: "Girls tryouts",
+    kind: "Tryouts",
+    gender: "Girls",
     date: "2026-11-07",
     time: "09:30",
     location: "Action Church",
-    genders: ["Girls"],
     grades: ["4", "5"],
     staff: ["5550001"],
   };
@@ -51,6 +64,9 @@ describe("events", () => {
          ('5550002', 'Amy', 'X', '4235550002', true, true, false),
          ('5550003', 'Ina', 'X', '4235550003', false, true, false)`,
     );
+    await db.pool.query(
+      "insert into event_types (name, created_by, created_at) values ('Open Gym', 'x', '2026-01-01'), ('Tryouts', 'x', '2026-01-02')",
+    );
     await reg("r1", "Ava", "Girls", "4");
     await reg("r2", "Bea", "Girls", "5");
     await reg("r3", "Cy", "Boys", "4");
@@ -58,14 +74,14 @@ describe("events", () => {
   });
 
   it("creates an event with the matching players, at 9:30 AM Eastern, and checks the input", async () => {
-    expect(await countMatching(deps(), director, tryouts)).toBe(2);
+    expect(await countMatching(deps(), director, { genders: ["Girls"], grades: ["4", "5"] })).toBe(2);
     expect(await countMatching(deps(), director, { genders: ["Girls", "Boys"], grades: ["4"] })).toBe(2);
     const r = await createEvent(deps(), director, tryouts);
     expect(r).toMatchObject({ ok: true, players: 2 });
     if (!r.ok) return;
     const e = await getEvent(deps(), director, r.id);
     expect(e).toMatchObject({
-      name: "Girls tryouts",
+      name: "Tryouts – Girls Grades 4–5",
       location: "Action Church",
       createdBy: "Earl X",
       staff: ["Hank X"],
@@ -82,10 +98,11 @@ describe("events", () => {
       const x = await createEvent(deps(), director, { ...tryouts, ...patch });
       return x.ok ? "ok" : x.message;
     };
-    expect(await bad({ name: "  " })).toBe("Give the event a name.");
+    expect(await bad({ kind: "  " })).toBe("Pick an event type.");
+    expect(await bad({ kind: "Pickup" })).toBe("That event type no longer exists. Pick again.");
     expect(await bad({ date: "11/7/2026" })).toBe("Pick a date.");
     expect(await bad({ time: "25:00" })).toBe("Pick a start time.");
-    expect(await bad({ genders: ["Coed"] })).toBe("Pick Boys, Girls, or both.");
+    expect(await bad({ gender: "Unisex" })).toBe("Pick Boys, Girls, or Coed.");
     expect(await bad({ grades: [] })).toBe("Pick at least one grade.");
     expect(await bad({ staff: ["5550003"] })).toBe("One of the check-in people is no longer active. Pick again.");
     expect(await createEvent(deps(), helper, tryouts)).toEqual({ ok: false, message: "Only the Director can manage events." });
@@ -96,7 +113,7 @@ describe("events", () => {
     if (!r.ok) throw new Error(r.message);
     expect(await getEvent(deps(), other, r.id)).toBeNull();
     expect((await listEvents(deps(), other)).length).toBe(0);
-    expect((await listEvents(deps(), helper)).map((e) => e.name)).toEqual(["Girls tryouts"]);
+    expect((await listEvents(deps(), helper)).map((e) => e.name)).toEqual(["Tryouts – Girls Grades 4–5"]);
     expect(await myEventCount(deps(), helper)).toBe(1);
 
     expect(await setStatus(deps(), other, { eventId: r.id, registrantId: "r1", status: "here" })).toEqual({
@@ -128,6 +145,34 @@ describe("events", () => {
     await setStatus(deps(), helper, { eventId: r.id, registrantId: "r1", status: "unknown" });
     e = await getEvent(deps(), helper, r.id);
     expect(e?.players[0]).toMatchObject({ status: "unknown", updatedBy: null, updatedAt: null });
+  });
+
+  it("Coed picks both genders; the name follows the type's spelling", async () => {
+    const r = await createEvent(deps(), director, { ...tryouts, kind: "open gym", gender: "Coed", grades: ["5", "4", "K"], staff: [] });
+    if (!r.ok) throw new Error(r.message);
+    const e = await getEvent(deps(), director, r.id);
+    expect(e).toMatchObject({ name: "Open Gym – Coed Grades K, 4–5", genders: ["Boys", "Girls"], total: 3 });
+  });
+
+  it("event types: the Director adds and removes quick options", async () => {
+    expect(await listEventTypes(deps())).toEqual(["Open Gym", "Tryouts"]);
+    expect(await addEventType(deps(), director, "  Skills   Clinic ")).toEqual({ ok: true, name: "Skills Clinic" });
+    expect(await addEventType(deps(), director, "skills clinic")).toEqual({
+      ok: false,
+      message: '"skills clinic" is already an event type.',
+    });
+    expect(await addEventType(deps(), director, "=HYPERLINK()")).toMatchObject({ ok: false });
+    expect(await addEventType(deps(), helper, "Camp")).toMatchObject({ ok: false });
+    expect(await listEventTypes(deps())).toEqual(["Open Gym", "Tryouts", "Skills Clinic"]);
+    expect(await removeEventType(deps(), director, "Open Gym")).toEqual({ ok: true });
+    expect(await listEventTypes(deps())).toEqual(["Tryouts", "Skills Clinic"]);
+  });
+
+  it("names: grades become ranges", () => {
+    expect(gradesText(["4"])).toBe("Grade 4");
+    expect(gradesText(["K", "1", "2", "3"])).toBe("Grades K–3");
+    expect(gradesText(["2", "4", "5", "6", "9"])).toBe("Grades 2, 4–6, 9");
+    expect(eventName("Open Run", "Coed", ["7", "8"])).toBe("Open Run – Coed Grades 7–8");
   });
 
   it("update player list adds new registrations without touching check-ins; delete removes it", async () => {
