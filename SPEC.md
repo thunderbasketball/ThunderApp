@@ -63,6 +63,8 @@ Same features, same rules. This file is the source of truth for behavior.
 5. **Forgot PIN?** (on the PIN step) → code goes **only** to the verified email → code + new PIN (twice, not 1234) → logged in, and the lockout is cleared. No verified email → "Please contact the Director."
 6. **Correct PIN, verified, but no Thunder role** → show **Request Access** button (sets ThunderRequest).
 
+**For now (until go-live): PIN only.** With `LOGIN_PIN_ONLY=true` in `.env.local`, the PIN on file is all it takes: phone → PIN → logged in. A PIN of 1234 on file works too (no Set Your PIN), and an unverified email doesn't matter. No PIN on file → "No PIN is set for this number yet. Please contact the Director." Wrong-PIN lockout, Active, and pending-request rules still apply. Create Account sends the request with no email code (email saved unverified). Forgot PIN → "Please contact the Director to reset your PIN." Turn this off at go-live to bring back Set Your PIN and email verification.
+
 ### Email codes
 - 6 digits, expire after 15 minutes.
 - Max 3 code emails per hour per person (per cell number).

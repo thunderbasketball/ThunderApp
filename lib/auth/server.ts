@@ -16,6 +16,7 @@ export const deps: Deps = {
   now: () => new Date(),
   devStarterBypass: devBypass,
   devFixedCode: devBypass ? "123456" : undefined,
+  pinOnly: process.env.LOGIN_PIN_ONLY === "true",
 };
 
 export async function sessionToken(): Promise<string | undefined> {

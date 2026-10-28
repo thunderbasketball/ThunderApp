@@ -294,6 +294,60 @@ describe("local testing bypass", () => {
   });
 });
 
+describe("PIN only (until go-live)", () => {
+  beforeEach(() => {
+    deps.pinOnly = true;
+  });
+
+  it("the PIN on file logs in, even with an unverified email and no email sent", async () => {
+    await addUser({ verified: false });
+    expect(await auth.lookupPhone(deps, CELL)).toEqual({ step: "pin" });
+    token(await auth.submitPin(deps, CELL, "5678"));
+    expect(mail.sent).toHaveLength(0);
+  });
+
+  it("a starter PIN 1234 on file works as the PIN, no Set Your PIN", async () => {
+    await addUser({ pin: "1234" });
+    expect(await auth.lookupPhone(deps, CELL)).toEqual({ step: "pin" });
+    token(await auth.submitPin(deps, CELL, "1234"));
+    expect(mail.sent).toHaveLength(0);
+  });
+
+  it("wrong PINs still count and lock the number", async () => {
+    await addUser({});
+    for (let i = 4; i >= 1; i--) expectError(await auth.submitPin(deps, CELL, "0000"), new RegExp(`${i} tr`));
+    expectError(await auth.submitPin(deps, CELL, "0000"), MSG.locked);
+    expectError(await auth.submitPin(deps, CELL, "5678"), MSG.locked);
+  });
+
+  it("no PIN on file: can't log in", async () => {
+    await addUser({ pin: null });
+    expectError(await auth.lookupPhone(deps, CELL), MSG.noPin);
+    expectError(await auth.submitPin(deps, CELL, "1234"), MSG.noPin);
+  });
+
+  it("inactive and pending people are still stopped", async () => {
+    await addUser({ active: false });
+    expect(await auth.submitPin(deps, CELL, "5678")).toEqual({ step: "done", message: MSG.deactivated });
+    await addUser({ cell: "4235550000", coach: false, request: true });
+    expect(await auth.submitPin(deps, "4235550000", "5678")).toEqual({ step: "done", message: MSG.pending });
+  });
+
+  it("Create Account sends the request with no email code", async () => {
+    const s = await auth.startSignup(deps, { cell: CELL, firstName: "Earl", lastName: "Epps", email: "e@example.com", pin1: "2468", pin2: "2468" });
+    expect(s).toEqual({ step: "done", message: MSG.requested });
+    expect(mail.sent).toHaveLength(0);
+    expect(await userRow()).toMatchObject({ thunder_request: true, thunder_director: false, email: "e@example.com", verified_email: null });
+    expectError(await auth.startSignup(deps, { cell: CELL, firstName: "X", lastName: "Y", email: "x@example.com", pin1: "2468", pin2: "2468" }), MSG.taken);
+  });
+
+  it("Forgot PIN says to ask the Director", async () => {
+    await addUser({});
+    expectError(await auth.startForgot(deps, CELL), MSG.askDirector);
+    expect(mail.sent).toHaveLength(0);
+  });
+});
+
 describe("PIN step", () => {
   it("correct PIN + verified email logs in", async () => {
     await addUser({ director: true });

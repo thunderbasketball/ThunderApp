@@ -23,6 +23,8 @@ export type Deps = {
   devStarterBypass?: boolean;
   // Local testing only: every code is this value, no email is sent, no emails-per-hour limit.
   devFixedCode?: string;
+  // Until go-live: the PIN in the database is all it takes. No Set Your PIN, no email codes.
+  pinOnly?: boolean;
 };
 
 export type Step =
@@ -84,6 +86,8 @@ export const MSG = {
   badEmail: "Enter a valid email address.",
   badName: "Enter your first and last name (letters only).",
   taken: "That number is already in use. Please contact the Director.",
+  noPin: "No PIN is set for this number yet. Please contact the Director.",
+  askDirector: "Please contact the Director to reset your PIN.",
 };
 
 // Verified only when Email = VerifiedEmail.
@@ -280,6 +284,7 @@ export async function lookupPhone(deps: Deps, cellInput: unknown): Promise<Step>
   if (deps.devStarterBypass && user.active) return { step: "devCode" };
   const blocked = gate(user);
   if (blocked) return blocked;
+  if (deps.pinOnly) return user.pin_hash ? { step: "pin" } : err(MSG.noPin);
   if (await isStarterPin(user.pin_hash)) {
     // Starter PIN: skip the PIN step. Code goes to the email on file, or ask for one.
     if (!user.email) return { step: "starterEmail" };
@@ -341,6 +346,10 @@ export async function submitPin(deps: Deps, cellInput: unknown, pin: unknown): P
     if (!user) return { step: "create" };
     const blocked = gate(user);
     if (blocked) return blocked;
+    if (deps.pinOnly) {
+      if (!user.pin_hash) return err(MSG.noPin);
+      return (await checkPin(deps, q, user, pin)) ?? startSession(deps, q, user.coach_id);
+    }
     // 1234 never logs anyone in (except with the local testing bypass).
     if (await isStarterPin(user.pin_hash)) {
       if (deps.devStarterBypass && pin === STARTER_PIN) return startSession(deps, q, user.coach_id);
@@ -402,6 +411,7 @@ export async function completeVerify(deps: Deps, cellInput: unknown, pin: unknow
 export async function startForgot(deps: Deps, cellInput: unknown): Promise<Step> {
   const cell = typeof cellInput === "string" ? normalizeCell(cellInput) : null;
   if (!cell) return err(MSG.badPhone);
+  if (deps.pinOnly) return err(MSG.askDirector);
   return withTx(deps.pool, async (q) => {
     await lockCell(q, cell);
     const user = await findUser(q, cell);
@@ -455,6 +465,15 @@ export async function startSignup(
     await lockCell(q, cell);
     const clash = await q.query("select 1 from users where cell = $1 or coach_id = $2", [cell, coachIdFromCell(cell)]);
     if (clash.rows.length) return err(MSG.taken);
+    if (deps.pinOnly) {
+      // No email code: the request goes straight to the Director. The email stays unverified.
+      await q.query(
+        `insert into users (coach_id, first_name, last_name, active, pin_hash, cell, email, thunder_request, created_at, updated_at)
+         values ($1, $2, $3, true, $4, $5, $6, true, $7, $7)`,
+        [coachIdFromCell(cell), firstName, lastName, pinHash, cell, email, deps.now()],
+      );
+      return { step: "done", message: MSG.requested };
+    }
     const fail = await issueCode(deps, q, cell, "signup", email, { firstName, lastName, pinHash });
     return fail ?? { step: "signupCode", maskedEmail: maskEmail(email) };
   });
