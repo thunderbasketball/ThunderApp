@@ -166,9 +166,10 @@ function emailOf(v: string | undefined, label: string, warn: (m: string) => void
   return s;
 }
 
-export function parseRegistrations(text: string, opts: { schoolYear: number }): ParseResult {
+// Takes CSV text, or rows already split into cells (e.g. read from the Google Sheet).
+export function parseRegistrations(input: string | string[][], opts: { schoolYear: number }): ParseResult {
   const result: ParseResult = { players: [], skipped: [], errors: [], warnings: [] };
-  const rows = parseCsv(text);
+  const rows = typeof input === "string" ? parseCsv(input) : input;
   if (rows.length < 2) {
     result.errors.push({ row: 1, message: "The file has no data rows." });
     return result;

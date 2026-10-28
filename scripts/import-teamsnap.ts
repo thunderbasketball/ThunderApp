@@ -1,21 +1,43 @@
-// Imports a TeamSnap registration CSV (stand-in for the Director's upload page, Phase 9).
-//   npm run import:teamsnap -- "data/import/<file>.csv" --dry-run   (check only)
-//   npm run import:teamsnap -- "data/import/<file>.csv"             (replace registrations)
+// Imports TeamSnap registrations (stand-in for the Director's upload page, Phase 9).
+//   npm run import:teamsnap -- --sheet --dry-run                    (check the Google Sheet's TeamSnapAPI tab)
+//   npm run import:teamsnap -- --sheet                              (replace registrations from it)
+//   npm run import:teamsnap -- "data/import/<file>.csv" [--dry-run] (same, from a CSV export)
 import { readFileSync } from "node:fs";
 import pg from "pg";
+import { loadServiceAccount, readTab, spreadsheetIdOf } from "../lib/google/sheets";
 import { parseRegistrations, schoolYearOf, type Problem } from "../lib/teamsnap/parse";
 import { importRegistrations } from "../lib/teamsnap/import";
 
 const args = process.argv.slice(2);
 const file = args.find((a) => !a.startsWith("--"));
 const dryRun = args.includes("--dry-run");
-if (!file) {
-  console.log('Usage: npm run import:teamsnap -- "data/import/<file>.csv" [--dry-run]');
+const fromSheet = args.includes("--sheet");
+if (!file && !fromSheet) {
+  console.log("Usage: npm run import:teamsnap -- --sheet [--dry-run]");
+  console.log('   or: npm run import:teamsnap -- "data/import/<file>.csv" [--dry-run]');
   process.exit(1);
 }
 
 const now = new Date();
-const parsed = parseRegistrations(readFileSync(file, "utf8"), { schoolYear: schoolYearOf(now) });
+let input: string | string[][];
+if (fromSheet) {
+  const sheet = process.env.REGISTRATIONS_SHEET;
+  if (!sheet) {
+    console.log("Set REGISTRATIONS_SHEET in .env.local to the Winter Registrations sheet link.");
+    process.exit(1);
+  }
+  const tab = process.env.REGISTRATIONS_TAB ?? "TeamSnapAPI";
+  try {
+    input = await readTab({ key: loadServiceAccount() }, spreadsheetIdOf(sheet), tab);
+  } catch (e) {
+    console.log(e instanceof Error ? e.message : e);
+    process.exit(1);
+  }
+  console.log(`Read the "${tab}" tab from Google Sheets.`);
+} else {
+  input = readFileSync(file!, "utf8");
+}
+const parsed = parseRegistrations(input, { schoolYear: schoolYearOf(now) });
 
 const list = (title: string, items: Problem[]) => {
   if (!items.length) return;
