@@ -7,7 +7,7 @@ export function LogoutButton() {
   const [busy, start] = useTransition();
   return (
     <button
-      className="shrink-0 rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium disabled:opacity-50 dark:border-zinc-700"
+      className="shrink-0 rounded-full px-3 py-2 text-sm font-medium text-zinc-600 ring-1 ring-zinc-950/10 hover:bg-zinc-100 disabled:opacity-50 dark:text-zinc-300 dark:ring-white/15 dark:hover:bg-zinc-800"
       disabled={busy}
       onClick={() =>
         start(async () => {
@@ -29,7 +29,7 @@ export function RequestAccess() {
     <div className="space-y-4">
       <p>You don&apos;t have access to Thunder Basketball yet.</p>
       <button
-        className="w-full rounded-lg bg-blue-700 px-4 py-3 text-lg font-semibold text-white disabled:opacity-50"
+        className="w-full rounded-xl bg-blue-600 px-4 py-3 text-lg font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
         disabled={busy}
         onClick={() =>
           start(async () => {

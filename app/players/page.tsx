@@ -5,10 +5,11 @@ import { listPlayerGroups } from "@/lib/players";
 import { formatCell } from "@/lib/phone";
 import { gradeLabel } from "@/lib/grades";
 import AppHeader from "../AppHeader";
+import { Chip, GroupCard, Notice, PageTitle, PersonRow, PhoneLink, Stats } from "../ui";
 
 export default function PlayersPage() {
   return (
-    <Suspense fallback={<p className="p-4">Loading…</p>}>
+    <Suspense fallback={<p className="p-4 text-zinc-500">Loading…</p>}>
       <Players />
     </Suspense>
   );
@@ -24,62 +25,61 @@ async function Players() {
   if (!user.isDirector) redirect("/");
 
   const { groups, importedAt, importedBy, sync } = await listPlayerGroups(user);
-  const total = groups.reduce((n, g) => n + g.players.length, 0);
+  const count = (gender: string) => groups.filter((g) => g.gender === gender).reduce((n, g) => n + g.players.length, 0);
+  const total = count("Boys") + count("Girls");
 
   return (
     <>
       <AppHeader user={user} tab="players" />
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6">
-        <div className="mb-4">
-          <h2 className="text-lg font-semibold">Registered players ({total})</h2>
-          {importedAt && (
-            <p className="text-sm text-zinc-500">
-              From TeamSnap, updated {when(importedAt)} by {importedBy}
-              {sync?.checkedAt && sync.ok && <> · sheet checked {when(sync.checkedAt)}</>}
-            </p>
-          )}
-          {sync && !sync.ok && (
-            <p className="mt-2 rounded-md bg-red-50 px-3 py-2 text-sm text-red-800 dark:bg-red-950 dark:text-red-200">
-              Couldn&apos;t update from the Google Sheet{sync.checkedAt && <> ({when(sync.checkedAt)})</>}: {sync.message}
-            </p>
-          )}
-        </div>
-        {!total && <p className="text-zinc-600">No registrations yet.</p>}
+        <PageTitle
+          title="Registered players"
+          subtitle={
+            importedAt && (
+              <>
+                From TeamSnap, updated {when(importedAt)} by {importedBy}
+                {sync?.checkedAt && sync.ok && <> · sheet checked {when(sync.checkedAt)}</>}
+              </>
+            )
+          }
+        />
+        <Stats
+          items={[
+            { label: "Players", value: total },
+            { label: "Boys", value: count("Boys"), tone: "text-blue-600 dark:text-blue-400" },
+            { label: "Girls", value: count("Girls"), tone: "text-pink-600 dark:text-pink-400" },
+          ]}
+        />
+        {sync && !sync.ok && (
+          <Notice tone="red">
+            Couldn&apos;t update from the Google Sheet{sync.checkedAt && <> ({when(sync.checkedAt)})</>}: {sync.message}
+          </Notice>
+        )}
+        {!total && <p className="text-zinc-500">No registrations yet.</p>}
         <div className="space-y-3">
           {groups.map((g) => (
-            <details key={`${g.gender}-${g.grade}`} className="rounded-lg border border-zinc-200 dark:border-zinc-800" open>
-              <summary className="cursor-pointer select-none px-4 py-3 font-semibold">
-                {g.gender} · {gradeLabel(g.grade)} <span className="font-normal text-zinc-500">({g.players.length})</span>
-              </summary>
-              <ul className="divide-y divide-zinc-200 border-t border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
-                {g.players.map((p) => (
-                  <li key={p.registrantId} className="px-4 py-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <p>
-                        {p.firstName} <span className="font-bold">{p.lastName}</span>
-                      </p>
-                      {p.coachingInterest && (
-                        <span className="shrink-0 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800 dark:bg-green-950 dark:text-green-200">
-                          Parent: {p.coachingInterest}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                      {p.parentName}
-                      {p.parentCell && p.parentCell.length === 10 && (
-                        <>
-                          {" · "}
-                          <a href={`tel:${p.parentCell}`} className="text-blue-700 dark:text-blue-400">
-                            {formatCell(p.parentCell)}
-                          </a>
-                        </>
-                      )}
-                    </p>
-                    {p.coachRequest && <p className="text-sm text-zinc-500">Coach request: {p.coachRequest}</p>}
-                  </li>
-                ))}
-              </ul>
-            </details>
+            <GroupCard key={`${g.gender}-${g.grade}`} title={`${g.gender} · ${gradeLabel(g.grade)}`} count={g.players.length}>
+              {g.players.map((p) => (
+                <PersonRow
+                  key={p.registrantId}
+                  first={p.firstName}
+                  last={p.lastName}
+                  avatarTone={p.gender === "Boys" ? "blue" : "pink"}
+                  chips={p.coachingInterest && <Chip tone="green">Parent: {p.coachingInterest}</Chip>}
+                >
+                  <p>
+                    {p.parentName}
+                    {p.parentCell && p.parentCell.length === 10 && (
+                      <>
+                        {" · "}
+                        <PhoneLink cell={p.parentCell} label={formatCell(p.parentCell)} />
+                      </>
+                    )}
+                  </p>
+                  {p.coachRequest && <p>Coach request: {p.coachRequest}</p>}
+                </PersonRow>
+              ))}
+            </GroupCard>
           ))}
         </div>
       </main>

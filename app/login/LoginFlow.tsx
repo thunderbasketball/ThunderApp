@@ -7,9 +7,9 @@ import type { ClientStep } from "./actions";
 type Screen = Exclude<ClientStep, { step: "error" } | { step: "loggedIn" }> | { step: "phone" } | { step: "verifyEmail" };
 
 const input =
-  "w-full rounded-lg border border-zinc-300 bg-white px-4 py-3 text-lg outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 dark:border-zinc-700 dark:bg-zinc-900";
+  "w-full rounded-xl border-0 bg-white px-4 py-3 text-lg shadow-sm ring-1 ring-inset ring-zinc-950/10 outline-none focus:ring-2 focus:ring-blue-600 dark:bg-zinc-900 dark:ring-white/15";
 const primary =
-  "w-full rounded-lg bg-blue-700 px-4 py-3 text-lg font-semibold text-white active:bg-blue-800 disabled:opacity-50";
+  "w-full rounded-xl bg-blue-600 px-4 py-3 text-lg font-semibold text-white shadow-sm hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50";
 const link = "text-blue-700 underline-offset-2 hover:underline disabled:opacity-50 dark:text-blue-400";
 
 export default function LoginFlow() {
@@ -292,12 +292,12 @@ export default function LoginFlow() {
   return (
     <div className="space-y-4">
       {error && (
-        <p role="alert" className="rounded-lg bg-red-50 px-4 py-3 text-red-800 dark:bg-red-950 dark:text-red-200">
+        <p role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 ring-1 ring-inset ring-red-600/20 dark:bg-red-500/10 dark:text-red-300">
           {error}
         </p>
       )}
       {notice && !error && (
-        <p role="status" className="rounded-lg bg-green-50 px-4 py-3 text-green-800 dark:bg-green-950 dark:text-green-200">
+        <p role="status" className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700 ring-1 ring-inset ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-300">
           {notice}
         </p>
       )}
