@@ -7,7 +7,7 @@ import nodemailer, { type Transporter } from "nodemailer";
 let gmail: Transporter | null = null;
 
 export async function sendEmail(to: string, subject: string, text: string): Promise<void> {
-  const gmailUser = process.env.GMAIL_USER;
+  const gmailUser = process.env.GMAIL_USER?.trim();
   const gmailPass = process.env.GMAIL_APP_PASSWORD;
   if (gmailUser && gmailPass) {
     gmail ??= nodemailer.createTransport({ service: "gmail", auth: { user: gmailUser, pass: gmailPass.replace(/\s/g, "") } });
