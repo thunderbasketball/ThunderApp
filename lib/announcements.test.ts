@@ -79,6 +79,57 @@ describe("announcements", () => {
     expect(await names({})).toEqual([]);
   });
 
+  it("a practice day reaches the staff of every team practicing that day (Eastern time)", async () => {
+    const g = await db.pool.query<{ id: string }>("insert into gyms (name) values ('Gym') returning id::text");
+    const c = await db.pool.query<{ id: string }>("insert into courts (gym_id, name) values ($1, 'Main') returning id::text", [
+      g.rows[0].id,
+    ]);
+    await db.pool.query(
+      `insert into slots (court_id, starts_at, team_id, created_by) values
+         ($1, '2026-11-10T23:00:00Z', $2, 'x'),  -- Tue 6 PM Eastern: team A
+         ($1, '2026-11-11T03:30:00Z', $3, 'x'),  -- Tue 10:30 PM Eastern (Wed in UTC): team B
+         ($1, '2026-11-11T18:00:00Z', null, 'x')`,
+      [c.rows[0].id, teamA, teamB],
+    );
+    expect(await names({ practiceDate: "2026-11-10" })).toEqual(["Amy", "Cole", "Hank", "Paula"]);
+    expect(await names({ practiceDate: "2026-11-11" })).toEqual([]);
+    expect(await names({ practiceDate: "11/10" })).toEqual([]);
+    const r = await sendAnnouncement(deps(), director, { ...msg, practiceDate: "2026-11-10" });
+    expect(r).toMatchObject({ ok: true, count: 4 });
+    expect((await listSent(deps(), director))[0].audience).toBe("Practicing Tue, 11/10");
+  });
+
+  it("volunteers: in the app if they have a login, otherwise emailed right away (once per address)", async () => {
+    const reg = (id: string, first: string, cell: string, email: string | null, interest: string | null) =>
+      db.pool.query(
+        `insert into registrations (registrant_id, registration_id, first_name, last_name, gender, grade, grade_sort, program,
+                                    parent1_first, parent1_cell, parent1_email, coaching_interest, raw, imported_at, imported_by)
+         values ($1, $1, 'Kid', 'X', 'Girls', '4', 4, '4th Girls', $2, $3, $4, $5, '{}', now(), 'x')`,
+        [id, first, cell, email, interest],
+      );
+    await reg("1", "Amy", "4235550002", "amy@example.com", "Head Coach"); // has a login
+    await reg("2", "Vic", "4235559001", "vic@example.com", "Assistant Coach"); // no login
+    await reg("3", "Vic", "4235559001", "VIC@example.com", "Assistant Coach"); // second child, same parent
+    await reg("4", "Nora", "4235559002", null, "Head Coach"); // no login, no email
+    await reg("5", "Pat", "4235559003", "pat@example.com", null); // didn't volunteer
+    expect(await previewAudience(deps(), director, { volunteers: true })).toEqual({ ok: true, names: ["Amy X"], emailOnly: 1 });
+
+    const mail: { to: string; subject: string; text: string }[] = [];
+    const r = await sendAnnouncement(
+      { ...deps(), sendEmail: async (to, subject, text) => void mail.push({ to, subject, text }) },
+      director,
+      {
+        ...msg,
+        volunteers: true,
+      },
+    );
+    expect(r).toMatchObject({ ok: true, count: 1, emailed: 1 });
+    expect(mail).toEqual([
+      { to: "vic@example.com", subject: "Thunder Basketball: Gym change", text: expect.stringContaining("Practice moves to Heritage.") },
+    ]);
+    expect((await listSent(deps(), director))[0]).toMatchObject({ audience: "Volunteer coaches", total: 1, emailed: 1 });
+  });
+
   it("sends to the picked people, describes who it went to, and checks the input", async () => {
     const r = await sendAnnouncement(deps(), director, { ...msg, roles: ["HeadCoach"], teams: [teamA] });
     expect(r).toMatchObject({ ok: true, count: 3 });

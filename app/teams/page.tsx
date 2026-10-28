@@ -7,6 +7,7 @@ import { listTeams, type TeamListItem } from "@/lib/teams";
 import AppHeader from "../AppHeader";
 import { Chip, GroupCard, PageTitle, Stats } from "../ui";
 import { ContactChip, GroupTextButton } from "../Contacts";
+import NotifyButton from "../NotifyButton";
 
 export default function TeamsPage() {
   return (
@@ -46,8 +47,10 @@ async function Teams() {
             + New team
           </Link>
         </div>
-        <div className="mb-4">
+        <div className="mb-4 flex items-center gap-2">
           <GroupTextButton cells={coachCells} label="Text all coaches" />
+          <NotifyButton audience={{ everyone: true }} to="everyone" size="md" />
+          <span className="text-sm text-zinc-500">Notify everyone</span>
         </div>
         <Stats
           items={[
@@ -88,11 +91,14 @@ async function Teams() {
                       />
                     </svg>
                   </Link>
-                  <div className="mt-1.5 flex flex-wrap gap-x-1 gap-y-1 pl-12">
-                    {t.staff.map((p) => (
-                      <ContactChip key={p.role} person={p} about={t.name} />
-                    ))}
-                    {!t.headCoach && <p className="text-sm text-amber-700 dark:text-amber-400">No head coach yet</p>}
+                  <div className="mt-1.5 flex items-start gap-2 pl-12">
+                    <div className="flex flex-1 flex-wrap gap-x-1 gap-y-1">
+                      {t.staff.map((p) => (
+                        <ContactChip key={p.role} person={p} about={t.name} />
+                      ))}
+                      {!t.headCoach && <p className="text-sm text-amber-700 dark:text-amber-400">No head coach yet</p>}
+                    </div>
+                    {t.staff.length > 0 && <NotifyButton audience={{ teams: [t.id] }} to={t.name} />}
                   </div>
                 </li>
               ))}

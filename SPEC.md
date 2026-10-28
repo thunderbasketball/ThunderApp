@@ -162,7 +162,7 @@ Example: Team has Thu 6PM. Mon 6PM is within 72h → can add it (N=1). Once Mon 
 
 ## 6. Director tools
 
-- **Volunteer coaches**: parents who offered to coach at registration, grouped by gender then grade, Head before Assistant. Each shows an HC/AC role circle with the name (tap for the contact card) and their player. **Text all volunteers** opens one group text.
+- **Coaches**: sections Volunteers (parents who offered to coach at registration, grouped by gender then grade, Head before Assistant, with their player), Current Head Coaches, Assistants, Managers, Team Parents (who holds that role on a team now, with their teams). Each person shows a role circle with the name (tap for the contact card). Each section has **Text all** (one group text) and a notify bell.
 - **Users**: grouped like the old app (Access Requests, Active Directors, Active Coaches, Other active, Non-active; last two collapsed), each sorted by last name, with each person's team roles shown. **+ Add user** (name, cell, email, Coach/Director; starter PIN 1234). **Edit** (pop-up): name, email (a changed email must be re-verified at next login), Active, Coach, Director; approve as Coach or deny a request. Granting any Thunder role clears ThunderRequest. A Director can't remove their own Director role or deactivate themselves. **Reset login** (not for yourself, with a warning): PIN back to starter 1234, email cleared, logged out everywhere, PIN lockout cleared; at their next login they enter an email, confirm it with a code, and choose a new PIN. **Delete** only when the person isn't the viewer, isn't on any team, and isn't used by Scenic City; otherwise deactivate. Who last changed a user is recorded (updated_by). Cell/CoachID can't be edited.
 - **Players**: all registered players grouped by Gender, then Grade, sorted by Last Name, with Interested/Rostered team pills.
 - **Map**: a flowchart page showing how the parts of the system connect.
@@ -211,6 +211,13 @@ Built in steps: (1) announcements, (2) chats, (3) phone notifications (needs hos
 - Everyone has a bell in the header with an unread count. **Announcements** (the inbox) lists theirs newest first; opening it marks them read. Unread ones are outlined and tagged New.
 - Director: **Sent** list with who it went to, "N of M read", and who hasn't read it yet. **Remove** (with a warning) takes it out of every inbox and cancels any reminder email not yet sent.
 - **Unread for 8 hours → one summary email** (from no-reply) listing all their unread announcements that are 8+ hours old, with a link to the inbox. Each announcement is emailed at most once; each person gets at most one such email every 8 hours. Reading in the app stops it. People with no email are skipped. Checked every 15 minutes while the server runs. `APP_URL` in `.env.local` is the link in the email.
+
+### Notify bells (Director)
+An orange bell opens a short pop-up (title + message) already addressed to that spot's group, shows how many it reaches (and who), and sends after a warning confirm. Same announcement rules as above.
+- **Teams page:** "Notify everyone"; each team card notifies that team's staff.
+- **Practice schedule:** each day that has practices booked notifies the staff of every team practicing that day.
+- **Coaches page** (sections: Volunteers, Head, Assistants, Managers, Team Parents, each with a count): each section notifies its group. Current role sections list everyone holding that role on a team, with their teams.
+- **Volunteers** who have an app login (matched by cell) get it in the app; those without one are emailed right away (once per address). The Sent list shows "also emailed N without an app login".
 
 ### Chats (planned)
 - Direct chat; team chat (that team's staff + Director, follows staff changes); Director-made groups. Coaches stay within their own teams' people and the Director. Same 8-hour email fallback.

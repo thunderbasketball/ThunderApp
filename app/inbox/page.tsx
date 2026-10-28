@@ -108,6 +108,7 @@ function Sent({ items }: { items: Awaited<ReturnType<typeof listSent>> }) {
           </div>
           <p className="mt-0.5 text-xs text-zinc-500">
             To {a.audience} · {a.sentBy} · {when(a.createdAt)}
+            {a.emailed > 0 && ` · also emailed ${a.emailed} without an app login`}
           </p>
           <p className="mt-3 text-sm whitespace-pre-wrap">{a.body}</p>
           {a.unread.length > 0 && (

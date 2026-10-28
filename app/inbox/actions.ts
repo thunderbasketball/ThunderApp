@@ -4,6 +4,7 @@ import * as ann from "@/lib/announcements";
 import type { AudienceInput } from "@/lib/announcements";
 import { currentUser } from "@/lib/auth/server";
 import { db } from "@/lib/db";
+import { sendEmail } from "@/lib/email";
 
 const deps = { pool: db, now: () => new Date() };
 
@@ -23,7 +24,7 @@ export async function previewAudience(input: AudienceInput) {
   return guarded((u) => ann.previewAudience(deps, u, input));
 }
 export async function sendAnnouncement(input: { title: unknown; body: unknown } & AudienceInput) {
-  return guarded((u) => ann.sendAnnouncement(deps, u, input));
+  return guarded((u) => ann.sendAnnouncement({ ...deps, sendEmail }, u, input));
 }
 export async function deleteAnnouncement(id: string) {
   return guarded((u) => ann.deleteAnnouncement(deps, u, String(id)));

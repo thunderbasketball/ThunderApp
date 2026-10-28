@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { GridSlot, WeekGrid } from "@/lib/practice/schedule";
 import { bookSlot, releaseSlot, setSlotBlocked } from "./actions";
 import { Alert, CloseButton, Toast, dialogCls } from "../client-ui";
+import NotifyButton from "../NotifyButton";
 import { fieldLabel, inputCls, primaryBtn } from "../ui";
 
 type Ctx = { slot: GridSlot; when: string; where: string };
@@ -182,7 +183,12 @@ export default function WeekGridView({
             key={d.iso}
             className="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-zinc-950/10 dark:bg-zinc-900 dark:ring-white/10"
           >
-            <h2 className="bg-zinc-900 px-4 py-2.5 text-sm font-bold text-white dark:bg-zinc-800">{d.label}</h2>
+            <h2 className="flex items-center justify-between gap-2 bg-zinc-900 px-4 py-2 text-sm font-bold text-white dark:bg-zinc-800">
+              {d.label}
+              {mode === "director" && d.gyms.some((g) => g.times.some((t) => t.slots.some((x) => x.team))) && (
+                <NotifyButton audience={{ practiceDate: d.iso }} to={`everyone practicing ${d.label}`} />
+              )}
+            </h2>
             <div className="space-y-3 px-4 py-3">
               {d.gyms.map((g) => (
                 <div key={g.gym}>

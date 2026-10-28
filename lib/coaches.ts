@@ -1,6 +1,7 @@
 import "server-only";
 import { db } from "./db";
 import type { SessionUser } from "./auth/service";
+import { ROLES, type Role } from "./teams";
 
 export type VolunteerCoach = {
   registrantId: string;
@@ -38,4 +39,20 @@ export async function listVolunteerCoaches(viewer: SessionUser): Promise<CoachGr
     g.coaches.push(c);
   }
   return groups;
+}
+
+export type StaffPerson = { coachId: string; first: string; last: string; cell: string; email: string | null; teams: string[] };
+export type StaffGroup = { role: Role; people: StaffPerson[] };
+
+// Director only. Everyone currently on a team, grouped by role (Head Coaches first), each with the teams they hold it on.
+export async function listCurrentStaff(viewer: SessionUser): Promise<StaffGroup[]> {
+  if (!viewer.isDirector) throw new Error("Director only");
+  const r = await db.query<StaffPerson & { role: Role }>(
+    `select s.role, u.coach_id as "coachId", u.first_name as first, u.last_name as last, u.cell, u.email,
+            array_agg(t.name order by t.grade_sort, lower(t.name)) as teams
+     from team_staff s join users u on u.coach_id = s.coach_id join teams t on t.id = s.team_id
+     group by s.role, u.coach_id
+     order by lower(u.last_name), lower(u.first_name)`,
+  );
+  return ROLES.map((role) => ({ role, people: r.rows.filter((p) => p.role === role) }));
 }

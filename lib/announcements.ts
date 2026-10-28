@@ -1,12 +1,15 @@
-// Announcements (SPEC.md section 9): the Director sends a one-way post to chosen users, roles, teams, or everyone.
+// Announcements (SPEC.md section 11): the Director sends a one-way post to chosen users, roles, teams, a practice day,
+// volunteer coaches, or everyone.
 // Everyone reads theirs in the inbox; anything unread after 8 hours goes out in one summary email.
 import type { Pool } from "pg";
 import type { SessionUser } from "./auth/service";
+import { cleanEmail } from "./auth/validate";
 import { withTx } from "./sql";
 import type { Role } from "./teams";
-import { TZ } from "./time";
+import { TZ, zonedTime } from "./time";
 
 type Deps = { pool: Pool; now: () => Date };
+type SendEmail = (to: string, subject: string, text: string) => Promise<void>;
 type Result<T = object> = ({ ok: true } & T) | { ok: false; message: string };
 
 export const EMAIL_AFTER_HOURS = 8;
@@ -24,8 +27,17 @@ export const AUDIENCE_ROLES: { key: RoleKey; label: string }[] = [
 ];
 const ROLE_KEYS = new Set<string>(AUDIENCE_ROLES.map((r) => r.key));
 
-export type AudienceInput = { everyone?: unknown; roles?: unknown; teams?: unknown; users?: unknown };
-type Audience = { everyone: boolean; roles: RoleKey[]; teams: string[]; users: string[] };
+// practiceDate: staff of every team with a practice booked that day (YYYY-MM-DD, Eastern).
+// volunteers: parents who offered to coach at registration (by app login; those without one are emailed).
+export type AudienceInput = {
+  everyone?: unknown;
+  roles?: unknown;
+  teams?: unknown;
+  users?: unknown;
+  practiceDate?: unknown;
+  volunteers?: unknown;
+};
+type Audience = { everyone: boolean; roles: RoleKey[]; teams: string[]; users: string[]; practiceDate: string | null; volunteers: boolean };
 
 function cleanAudience(input: AudienceInput): Audience {
   const list = (v: unknown, ok: (s: string) => boolean) =>
@@ -35,12 +47,22 @@ function cleanAudience(input: AudienceInput): Audience {
     roles: list(input.roles, (s) => ROLE_KEYS.has(s)) as RoleKey[],
     teams: list(input.teams, (s) => /^\d{1,18}$/.test(s)),
     users: list(input.users, (s) => /^\d{7}$/.test(s)),
+    practiceDate: typeof input.practiceDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(input.practiceDate) ? input.practiceDate : null,
+    volunteers: input.volunteers === true,
   };
+}
+
+// The Eastern-time start and end of a YYYY-MM-DD day.
+function dayRange(iso: string | null): [Date | null, Date | null] {
+  if (!iso) return [null, null];
+  const [y, m, d] = iso.split("-").map(Number);
+  const next = new Date(Date.UTC(y, m - 1, d + 1));
+  return [zonedTime(y, m, d), zonedTime(next.getUTCFullYear(), next.getUTCMonth() + 1, next.getUTCDate())];
 }
 
 // People who can get announcements: active, with a Thunder role (Coach, Director, or on a team). Never the sender.
 const RECIPIENTS = `
-  select u.coach_id, u.first_name, u.last_name from users u
+  select u.coach_id, u.first_name, u.last_name, u.cell, u.email from users u
   where u.active
     and (u.thunder_coach or u.thunder_director or exists (select 1 from team_staff s where s.coach_id = u.coach_id))
     and u.coach_id <> $1
@@ -48,16 +70,55 @@ const RECIPIENTS = `
       or ('director' = any($3::text[]) and u.thunder_director)
       or ('coach' = any($3::text[]) and u.thunder_coach)
       or exists (select 1 from team_staff s where s.coach_id = u.coach_id and (s.role = any($3::text[]) or s.team_id::text = any($4::text[])))
-      or u.coach_id = any($5::text[]))
+      or u.coach_id = any($5::text[])
+      or exists (select 1 from team_staff s join slots sl on sl.team_id = s.team_id
+                 where s.coach_id = u.coach_id and sl.starts_at >= $6 and sl.starts_at < $7)
+      or ($8 and exists (select 1 from registrations g where g.coaching_interest is not null and g.parent1_cell = u.cell)))
   order by lower(u.last_name), lower(u.first_name)`;
 
-const recipientParams = (viewer: SessionUser, a: Audience) => [viewer.coachId, a.everyone, a.roles, a.teams, a.users];
+const recipientParams = (viewer: SessionUser, a: Audience) => [
+  viewer.coachId,
+  a.everyone,
+  a.roles,
+  a.teams,
+  a.users,
+  ...dayRange(a.practiceDate),
+  a.volunteers,
+];
+
+type Recipient = { coach_id: string; first_name: string; last_name: string; cell: string; email: string | null };
+
+// Volunteers with no app login among the recipients: they get the announcement by email instead (one per address).
+async function emailOnlyVolunteers(q: Pick<Pool, "query">, a: Audience, people: Recipient[]): Promise<{ email: string; first: string }[]> {
+  if (!a.volunteers) return [];
+  const r = await q.query<{ email: string | null; first: string | null; cell: string | null }>(
+    `select parent1_email as email, nullif(trim(parent1_first), '') as first, parent1_cell as cell
+     from registrations where coaching_interest is not null order by registrant_id`,
+  );
+  const cells = new Set(people.map((p) => p.cell));
+  const seen = new Set(people.flatMap((p) => (p.email ? [p.email.toLowerCase()] : [])));
+  const out: { email: string; first: string }[] = [];
+  for (const v of r.rows) {
+    const email = cleanEmail(v.email ?? "");
+    if (!email || (v.cell && cells.has(v.cell)) || seen.has(email)) continue;
+    seen.add(email);
+    out.push({ email, first: v.first ?? "there" });
+  }
+  return out;
+}
 
 // Who a selection reaches, before sending (the compose screen shows the count and names).
-export async function previewAudience(deps: Deps, viewer: SessionUser, input: AudienceInput): Promise<Result<{ names: string[] }>> {
+// emailOnly: volunteers without a login, who'll get it by email.
+export async function previewAudience(
+  deps: Deps,
+  viewer: SessionUser,
+  input: AudienceInput,
+): Promise<Result<{ names: string[]; emailOnly: number }>> {
   if (!viewer.isDirector) return { ok: false, message: "Only the Director can send announcements." };
-  const r = await deps.pool.query<{ first_name: string; last_name: string }>(RECIPIENTS, recipientParams(viewer, cleanAudience(input)));
-  return { ok: true, names: r.rows.map((u) => `${u.first_name} ${u.last_name}`) };
+  const a = cleanAudience(input);
+  const r = await deps.pool.query<Recipient>(RECIPIENTS, recipientParams(viewer, a));
+  const extra = await emailOnlyVolunteers(deps.pool, a, r.rows);
+  return { ok: true, names: r.rows.map((u) => `${u.first_name} ${u.last_name}`), emailOnly: extra.length };
 }
 
 // Everything the compose screen can pick from.
@@ -82,6 +143,11 @@ export async function audienceChoices(deps: Deps, viewer: SessionUser) {
 async function describe(deps: Deps, a: Audience): Promise<string> {
   if (a.everyone) return "Everyone";
   const parts: string[] = a.roles.map((k) => AUDIENCE_ROLES.find((r) => r.key === k)!.label);
+  if (a.volunteers) parts.push("Volunteer coaches");
+  if (a.practiceDate) {
+    const [start] = dayRange(a.practiceDate);
+    parts.push(`Practicing ${start!.toLocaleDateString("en-US", { timeZone: TZ, weekday: "short", month: "numeric", day: "numeric" })}`);
+  }
   if (a.teams.length) {
     const t = await deps.pool.query<{ name: string }>("select name from teams where id::text = any($1) order by lower(name)", [a.teams]);
     parts.push(...t.rows.map((x) => x.name));
@@ -97,10 +163,10 @@ async function describe(deps: Deps, a: Audience): Promise<string> {
 }
 
 export async function sendAnnouncement(
-  deps: Deps,
+  deps: Deps & { sendEmail?: SendEmail },
   viewer: SessionUser,
   input: { title: unknown; body: unknown } & AudienceInput,
-): Promise<Result<{ id: string; count: number }>> {
+): Promise<Result<{ id: string; count: number; emailed: number }>> {
   if (!viewer.isDirector) return { ok: false, message: "Only the Director can send announcements." };
   const title = typeof input.title === "string" ? input.title.trim().replace(/\s+/g, " ") : "";
   const body = typeof input.body === "string" ? input.body.replace(/\r\n/g, "\n").trim() : "";
@@ -110,20 +176,40 @@ export async function sendAnnouncement(
   if (body.length > 4000) return { ok: false, message: "Keep the message to 4,000 characters." };
   const a = cleanAudience(input);
   const audience = await describe(deps, a);
-  return withTx(deps.pool, async (q) => {
-    const people = await q.query<{ coach_id: string }>(RECIPIENTS, recipientParams(viewer, a));
-    if (!people.rows.length) return { ok: false as const, message: "Pick who should get it. Nobody matches yet." };
+  const sentBy = `${viewer.firstName} ${viewer.lastName}`;
+  const saved = await withTx(deps.pool, async (q) => {
+    const people = await q.query<Recipient>(RECIPIENTS, recipientParams(viewer, a));
+    const extra = await emailOnlyVolunteers(q, a, people.rows);
+    if (!people.rows.length && !extra.length) return { ok: false as const, message: "Pick who should get it. Nobody matches yet." };
     const ins = await q.query<{ id: string }>(
       `insert into announcements (title, body, audience, sent_by, sent_by_id, created_at) values ($1, $2, $3, $4, $5, $6) returning id::text`,
-      [title, body, audience, `${viewer.firstName} ${viewer.lastName}`, viewer.coachId, deps.now()],
+      [title, body, audience, sentBy, viewer.coachId, deps.now()],
     );
     const id = ins.rows[0].id;
     await q.query("insert into announcement_recipients (announcement_id, coach_id) select $1, unnest($2::text[])", [
       id,
       people.rows.map((p) => p.coach_id),
     ]);
-    return { ok: true as const, id, count: people.rows.length };
+    return { ok: true as const, id, count: people.rows.length, extra };
   });
+  if (!saved.ok) return saved;
+
+  // After it's saved: email the volunteers who have no login. One failed address doesn't stop the rest.
+  let emailed = 0;
+  for (const v of saved.extra) {
+    try {
+      await deps.sendEmail?.(
+        v.email,
+        `Thunder Basketball: ${title}`,
+        `Hi ${v.first},\n\n${body}\n\n— ${sentBy}, Thunder Basketball\n\nThis is an automatic email. Replies aren't read.`,
+      );
+      if (deps.sendEmail) emailed++;
+    } catch (e) {
+      console.error("Volunteer announcement email failed:", e);
+    }
+  }
+  if (emailed) await deps.pool.query("update announcements set extra_emails = $2 where id = $1", [saved.id, emailed]);
+  return { ok: true, id: saved.id, count: saved.count, emailed };
 }
 
 export type InboxItem = { id: string; title: string; body: string; sentBy: string; createdAt: Date; read: boolean };
@@ -166,6 +252,7 @@ export async function deleteAnnouncement(deps: Deps, viewer: SessionUser, id: un
 }
 
 export type SentItem = {
+  emailed: number;
   id: string;
   title: string;
   body: string;
@@ -180,7 +267,7 @@ export type SentItem = {
 export async function listSent(deps: Deps, viewer: SessionUser): Promise<SentItem[]> {
   if (!viewer.isDirector) throw new Error("Director only");
   const r = await deps.pool.query<SentItem>(
-    `select a.id::text, a.title, a.body, a.audience, a.sent_by as "sentBy", a.created_at as "createdAt",
+    `select a.id::text, a.title, a.body, a.audience, a.extra_emails as emailed, a.sent_by as "sentBy", a.created_at as "createdAt",
             (select count(*)::int from announcement_recipients r where r.announcement_id = a.id) as total,
             array(select u.first_name || ' ' || u.last_name from announcement_recipients r join users u on u.coach_id = r.coach_id
                   where r.announcement_id = a.id and r.read_at is null order by lower(u.last_name), lower(u.first_name)) as unread
