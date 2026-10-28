@@ -16,6 +16,7 @@ export type TeamListItem = {
   grades: string[];
   level: string;
   createdBy: string;
+  practiceLocations: string[];
   headCoach: { first: string; last: string; cell: string } | null;
 };
 
@@ -23,7 +24,7 @@ export type TeamListItem = {
 export async function listTeams(deps: Deps, viewer: SessionUser): Promise<TeamListItem[]> {
   if (!viewer.isDirector) throw new Error("Director only");
   const r = await deps.pool.query<TeamListItem & { hFirst: string | null; hLast: string; hCell: string }>(
-    `select t.id::text, t.name, t.gender, t.grades, t.level, t.created_by as "createdBy",
+    `select t.id::text, t.name, t.gender, t.grades, t.level, t.created_by as "createdBy", t.practice_locations as "practiceLocations",
             u.first_name as "hFirst", u.last_name as "hLast", u.cell as "hCell"
      from teams t
      left join team_staff s on s.team_id = t.id and s.role = 'HeadCoach'

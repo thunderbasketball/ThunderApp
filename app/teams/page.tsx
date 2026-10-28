@@ -73,12 +73,15 @@ async function Teams() {
                     </div>
                     <div className="mt-0.5 space-y-0.5 text-sm text-zinc-500 dark:text-zinc-400">
                       <p>{gradesLabel(t.grades)}</p>
-                      {t.headCoach && (
+                      {t.headCoach ? (
                         <p>
                           Head coach: {t.headCoach.first} {t.headCoach.last} ·{" "}
                           <PhoneLink cell={t.headCoach.cell} label={formatCell(t.headCoach.cell)} />
                         </p>
+                      ) : (
+                        <p className="text-amber-700 dark:text-amber-400">No head coach yet</p>
                       )}
+                      {t.practiceLocations.length > 0 && <p>Practices: {t.practiceLocations.join(", ")}</p>}
                       <p className="text-xs">Created by {t.createdBy}</p>
                     </div>
                   </div>

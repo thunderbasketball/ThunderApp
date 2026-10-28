@@ -113,7 +113,7 @@ const linkCls = "text-blue-600 hover:underline dark:text-blue-400";
 
 export function PhoneLink({ cell, label }: { cell: string; label: string }) {
   return (
-    <a href={`tel:${cell}`} className={linkCls}>
+    <a href={`tel:${cell}`} className={`${linkCls} whitespace-nowrap`}>
       {label}
     </a>
   );
