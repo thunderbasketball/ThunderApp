@@ -223,8 +223,22 @@ An orange bell opens a short pop-up (title + message) already addressed to that 
 - **Coaches page** (sections: Volunteers, Head, Assistants, Managers, Team Parents, each with a count): each section notifies its group. Current role sections list everyone holding that role on a team, with their teams.
 - **Volunteers** who have an app login (matched by cell) get it in the app; those without one are emailed right away (once per address). The Sent list shows "also emailed N without an app login".
 
-### Chats (planned)
-- Direct chat; team chat (that team's staff + Director, follows staff changes); Director-made groups. Coaches stay within their own teams' people and the Director. Same 8-hour email fallback.
+### Chat (built)
+A chat bubble in the header (everyone with a role) shows unread chat messages and opens **Chat**: the person's chats, newest activity first, with the last message and an unread count. **+ New chat** lists what they can start; opening one that already has messages goes to it.
+
+| Chat | Members | Who can start it |
+|---|---|---|
+| Directors | Directors | Directors |
+| Directors & all coaches | Directors + every coach | Directors, coaches |
+| Coaches | coaches (Directors can read and post, but get no unread counts or emails from it) | coaches |
+| <team> · Team | that team's staff (all roles) + Directors | the team's staff, Directors |
+| <team> · Coaches | that team's Head and Assistant Coaches + Directors | Directors, those coaches |
+| <coach> · Directors | one coach + the Directors (the coach sees it as "Directors") | that coach, Directors |
+
+- A "coach" has the Coach role or is a Head or Assistant Coach on a team. Members follow current roles and team staff, so changes apply at once. **Directors can open every chat.** Team Parents and Managers are only in their team chats.
+- Messages (up to 2,000 characters) show oldest to newest with sender and time; the open chat checks for new messages every 5 seconds. Opening a chat marks it read (not while viewing as someone; posting is refused then too). Enter sends on a keyboard; phones use Send.
+- **Unread for 8 hours → one email** per person listing each chat with unread messages (last few shown), each message emailed once, at most one chat email every 8 hours. Checked every 15 minutes with the announcement emails.
+- Phone notifications come later (needs hosting).
 
 ## 12. Events & check-in (built)
 - **Events** tab (Director): list of events, today and later first, past ones collapsed. Each shows date/time, location, player count, ✓/✗/? counts and who runs check-in.

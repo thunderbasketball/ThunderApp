@@ -1,0 +1,156 @@
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import type { SessionUser } from "./auth/service";
+import { chatUnreadCount, getChat, listChats, markChatRead, newChatOptions, postMessage, sendUnreadChatEmails } from "./chat";
+import { createTestDb } from "./testing/db";
+
+const person = (coachId: string, firstName: string, isDirector = false): SessionUser => ({
+  coachId,
+  firstName,
+  lastName: "X",
+  isDirector,
+  isCoach: true,
+  requestPending: false,
+  hasThunderRole: true,
+});
+const dir = person("9913694", "Dee", true);
+const cal = person("5550001", "Cal"); // Coach role, Head Coach of team A
+const ace = person("5550002", "Ace"); // Assistant Coach of team B (no Coach role on the user record)
+const pam = person("5550003", "Pam"); // Team Parent on team A
+const max = person("5550004", "Max"); // Manager on team B
+
+describe("chat", () => {
+  let db: Awaited<ReturnType<typeof createTestDb>>;
+  beforeAll(async () => {
+    db = await createTestDb();
+  }, 30_000);
+  afterAll(async () => {
+    await db?.drop();
+  });
+  let now = new Date("2026-10-28T12:00:00Z");
+  const deps = () => ({ pool: db.pool, now: () => now });
+  const later = (minutes: number) => (now = new Date(now.getTime() + minutes * 60_000));
+  let A = "";
+  let B = "";
+
+  beforeEach(async () => {
+    await db.reset();
+    now = new Date("2026-10-28T12:00:00Z");
+    await db.pool.query(
+      `insert into users (coach_id, first_name, last_name, cell, email, thunder_director, thunder_coach) values
+         ('9913694', 'Dee', 'X', '4239913694', 'dee@example.com', true, false),
+         ('5550001', 'Cal', 'X', '4235550001', 'cal@example.com', false, true),
+         ('5550002', 'Ace', 'X', '4235550002', 'ace@example.com', false, false),
+         ('5550003', 'Pam', 'X', '4235550003', 'pam@example.com', false, false),
+         ('5550004', 'Max', 'X', '4235550004', null, false, false)`,
+    );
+    const t = await db.pool.query<{ id: string }>(
+      `insert into teams (name, gender, grades, grade_sort, level, created_by) values ('4G A', 'Girls', '{4}', 4, 'REC', 'x'), ('5B B', 'Boys', '{5}', 5, 'REC', 'x') returning id::text`,
+    );
+    [A, B] = t.rows.map((r) => r.id);
+    await db.pool.query(
+      `insert into team_staff (team_id, coach_id, role, added_by) values
+         ($1, '5550001', 'HeadCoach', 'x'), ($1, '5550003', 'TeamParent', 'x'), ($2, '5550002', 'AsstCoach', 'x'), ($2, '5550004', 'Manager', 'x')`,
+      [A, B],
+    );
+  });
+
+  const keys = async (u: SessionUser) => (await newChatOptions(deps(), u)).map((o) => o.key);
+  const post = async (u: SessionUser, key: string, body = "hi") => {
+    later(1);
+    return postMessage(deps(), u, key, body);
+  };
+
+  it("who can start what", async () => {
+    expect(await keys(cal)).toEqual(["coach-5550001", "everyone", "coaches", `team-${A}`, `teamcoaches-${A}`]);
+    expect(await keys(ace)).toEqual(["coach-5550002", "everyone", "coaches", `team-${B}`, `teamcoaches-${B}`]); // a team coach counts as a coach
+    expect(await keys(pam)).toEqual([`team-${A}`]);
+    const d = await keys(dir);
+    expect(d.slice(0, 3)).toEqual(["directors", "everyone", "coaches"]);
+    expect(d).toContain("coach-5550001");
+    expect(d).toContain("coach-5550002");
+    expect(d).not.toContain("coach-5550003"); // a Team Parent isn't a coach
+    expect(d).toContain(`teamcoaches-${B}`);
+  });
+
+  it("each chat is only for its people; Directors can open every chat", async () => {
+    expect(await post(cal, "coach-5550001", "Need a gym Tuesday")).toMatchObject({ ok: true });
+    expect(await post(ace, "coach-5550001")).toEqual({ ok: false, message: "You can't post in this chat." });
+    expect(await getChat(deps(), ace, "coach-5550001")).toBeNull();
+    expect(await getChat(deps(), dir, "coach-5550001")).toMatchObject({ title: "Cal X · Directors", members: ["Cal X", "Dee X"] });
+    expect(await getChat(deps(), cal, "coach-5550001")).toMatchObject({ title: "Directors" });
+
+    expect(await post(pam, `team-${A}`, "Snacks Saturday")).toMatchObject({ ok: true });
+    expect(await getChat(deps(), max, `team-${A}`)).toBeNull();
+    expect(await getChat(deps(), pam, `teamcoaches-${A}`)).toBeNull();
+    expect((await getChat(deps(), cal, `team-${A}`))?.members).toEqual(["Cal X", "Dee X", "Pam X"]);
+    expect(await post(pam, "coaches")).toMatchObject({ ok: false });
+    expect(await post(pam, "directors")).toMatchObject({ ok: false });
+    expect(await post(cal, "directors")).toMatchObject({ ok: false });
+
+    expect(await post(dir, "coaches", "Directors can post here too")).toMatchObject({ ok: true });
+    expect((await getChat(deps(), ace, "coaches"))?.members).toEqual(["Ace X", "Cal X"]);
+    expect(await post(dir, "coach-5550003")).toEqual({ ok: false, message: "That person isn't an active coach." }); // Pam isn't a coach
+  });
+
+  it("checks the message and the chat key", async () => {
+    expect(await postMessage(deps(), cal, "everyone", "   ")).toEqual({ ok: false, message: "Type a message." });
+    expect(await postMessage(deps(), cal, "everyone", "x".repeat(2001))).toMatchObject({ ok: false });
+    expect(await postMessage(deps(), cal, "team-1; drop table users", "hi")).toMatchObject({ ok: false });
+    expect(await getChat(deps(), dir, "coach-5550003")).toBeNull(); // not a coach
+  });
+
+  it("unread counts: your own messages don't count, opening a chat clears it, Directors aren't counted in the coaches' chat", async () => {
+    await post(cal, "everyone", "one");
+    await post(cal, "everyone", "two");
+    await post(cal, "coaches", "coaches only");
+    await post(pam, `team-${A}`, "team");
+    expect(await chatUnreadCount(deps(), cal)).toBe(1); // Pam's team message
+    expect(await chatUnreadCount(deps(), ace)).toBe(3); // everyone ×2 + coaches
+    expect(await chatUnreadCount(deps(), dir)).toBe(3); // everyone ×2 + team, not the coaches' chat
+    expect((await listChats(deps(), dir)).map((c) => [c.title, c.unread])).toEqual([
+      ["4G A · Team", 1],
+      ["Coaches", 0],
+      ["Directors & all coaches", 2],
+    ]);
+    expect((await listChats(deps(), max)).map((c) => c.title)).toEqual([]);
+    later(1);
+    await markChatRead(deps(), ace, "everyone");
+    expect(await chatUnreadCount(deps(), ace)).toBe(1);
+    expect((await listChats(deps(), ace)).find((c) => c.key === "everyone")).toMatchObject({
+      unread: 0,
+      last: { body: "two", sender: "Cal X" },
+    });
+  });
+
+  it("unread for 8 hours: one email per person, each message once, at most every 8 hours", async () => {
+    const mail: { to: string; subject: string; text: string }[] = [];
+    const run = () =>
+      sendUnreadChatEmails({
+        ...deps(),
+        appUrl: "https://app.example",
+        sendEmail: async (to, subject, text) => void mail.push({ to, subject, text }),
+      });
+
+    await post(cal, "everyone", "Practice plans posted");
+    await post(pam, `team-${A}`, "Snacks Saturday");
+    await markChatRead(deps(), dir, `team-${A}`); // Dee read the team chat
+    later(8 * 60 - 3);
+    expect(await run()).toBe(0);
+    later(5);
+    expect(await run()).toBe(3);
+    expect(mail.map((m) => [m.to, m.subject]).sort()).toEqual([
+      ["ace@example.com", "Thunder Basketball: 1 unread chat message"],
+      ["cal@example.com", "Thunder Basketball: 1 unread chat message"],
+      ["dee@example.com", "Thunder Basketball: 1 unread chat message"],
+    ]);
+    expect(mail.find((m) => m.to === "cal@example.com")?.text).toContain("■ 4G A · Team (1 unread)");
+    expect(mail.find((m) => m.to === "dee@example.com")?.text).toContain("Cal X, ");
+    expect(mail[0].text).toContain("https://app.example/chat");
+    expect(await run()).toBe(0);
+
+    await post(cal, "everyone", "Another");
+    later(9 * 60);
+    expect(await run()).toBe(2); // Ace and Dee; each message only once
+    expect(mail.at(-1)?.text).not.toContain("Practice plans posted");
+  });
+});

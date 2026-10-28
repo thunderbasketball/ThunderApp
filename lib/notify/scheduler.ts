@@ -1,6 +1,7 @@
-// Sends the "unread for 8 hours" summary emails: checks every 15 minutes while the server runs
+// Sends the "unread for 8 hours" summary emails (announcements and chat): checks every 15 minutes while the server runs
 // (started from instrumentation.ts).
 import { sendUnreadEmails } from "../announcements";
+import { sendUnreadChatEmails } from "../chat";
 import { db } from "../db";
 import { sendEmail } from "../email";
 
@@ -12,8 +13,11 @@ async function run() {
   g.thunderNotifyRunning = true;
   try {
     const appUrl = (process.env.APP_URL || "http://localhost:3000").replace(/\/+$/, "");
-    const n = await sendUnreadEmails({ pool: db, now: () => new Date(), sendEmail, appUrl });
+    const deps = { pool: db, now: () => new Date(), sendEmail, appUrl };
+    const n = await sendUnreadEmails(deps);
     if (n) console.log(`[notify] Sent ${n} unread-announcement email${n === 1 ? "" : "s"}.`);
+    const c = await sendUnreadChatEmails(deps);
+    if (c) console.log(`[notify] Sent ${c} unread-chat email${c === 1 ? "" : "s"}.`);
   } catch (e) {
     console.error("[notify] failed:", e);
   } finally {

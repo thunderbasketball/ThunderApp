@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { after } from "next/server";
 import { popupAnnouncements, unreadCount } from "@/lib/announcements";
+import { chatUnreadCount } from "@/lib/chat";
 import type { SessionUser } from "@/lib/auth/service";
 import { currentContexts } from "@/lib/contexts-server";
 import { db } from "@/lib/db";
@@ -31,12 +32,13 @@ async function checkInsFor(user: SessionUser): Promise<number> {
 // `context` is the role this page is shown as ("director" or "team:<id>"); it highlights that chip.
 export default async function AppHeader({ user, tab, context }: { user: SessionUser; tab?: Tab; context?: string }) {
   const deps = { pool: db, now: () => new Date() };
-  const [{ contexts }, unread, myEvents, popups] = await Promise.all([
+  const [{ contexts }, unread, myEvents, popups, chatUnread] = await Promise.all([
     currentContexts(user),
     unreadCount(deps, user),
     user.isDirector ? 0 : checkInsFor(user),
     // Not while a Director is viewing as this person.
     user.actingBy ? [] : popupAnnouncements(deps, user),
+    user.hasThunderRole ? chatUnreadCount(deps, user) : 0,
   ]);
   // Backup for the sheet timer: after this page is sent, refresh registrations if the last check is stale.
   after(syncIfStale);
@@ -85,6 +87,26 @@ export default async function AppHeader({ user, tab, context }: { user: SessionU
                 className="rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-semibold whitespace-nowrap text-white hover:bg-emerald-700"
               >
                 ✓ Check-in
+              </Link>
+            )}
+            {user.hasThunderRole && (
+              <Link
+                href="/chat"
+                aria-label={chatUnread ? `Chat, ${chatUnread} unread` : "Chat"}
+                className="relative rounded-full p-1.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-white"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden className="size-6">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M8.625 12a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H8.25m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H12m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 0 1-2.555-.337A5.972 5.972 0 0 1 5.41 20.97a5.969 5.969 0 0 1-.474-.065 4.48 4.48 0 0 0 .978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25Z"
+                  />
+                </svg>
+                {chatUnread > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 flex min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-[11px] font-bold text-white tabular-nums">
+                    {chatUnread > 99 ? "99+" : chatUnread}
+                  </span>
+                )}
               </Link>
             )}
             {user.hasThunderRole && (
