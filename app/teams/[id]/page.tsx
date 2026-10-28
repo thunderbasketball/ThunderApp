@@ -165,10 +165,10 @@ async function Team({ params }: { params: PageProps<"/teams/[id]">["params"] }) 
         </section>
         <section className={`${card} overflow-hidden`}>
           <div className="flex items-center justify-between gap-3 px-4 pt-4 pb-3">
-            <h2 className="font-semibold">Upcoming practices ({practices.length})</h2>
+            <h2 className="font-semibold">Practices ({practices.length})</h2>
             <Link
               href={`/practice?team=${team.id}`}
-              className="rounded-full bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700"
+              className="shrink-0 rounded-full bg-thunder-blue px-3 py-1.5 text-sm font-semibold whitespace-nowrap text-white shadow-sm hover:bg-thunder-blue-dark"
             >
               {canBook ? "Book practices" : "View schedule"}
             </Link>

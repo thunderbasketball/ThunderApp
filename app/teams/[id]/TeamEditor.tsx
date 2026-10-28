@@ -211,7 +211,7 @@ export function AddStaffButton({
           setError(null);
           dialog.current?.showModal();
         }}
-        className="rounded-full bg-thunder-blue px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-thunder-blue-dark"
+        className="shrink-0 rounded-full bg-thunder-blue px-3 py-1.5 text-sm font-semibold whitespace-nowrap text-white shadow-sm hover:bg-thunder-blue-dark"
       >
         + Add staff
       </button>
