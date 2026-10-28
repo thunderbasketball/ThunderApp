@@ -24,8 +24,8 @@ export type Deps = {
   devStarterBypass?: boolean;
   // Local testing only: every code is this value, no email is sent, no emails-per-hour limit.
   devFixedCode?: string;
-  // Until go-live: people already in the users list log in with the PIN on file only (no Set Your PIN,
-  // no email check). New numbers still verify their email with a code (Create Account).
+  // Until go-live: a chosen PIN logs straight in, with no email check. Starter PIN 1234 still sets a new PIN
+  // with an email code, and new numbers still verify their email (Create Account).
   pinOnly?: boolean;
 };
 
@@ -286,7 +286,6 @@ export async function lookupPhone(deps: Deps, cellInput: unknown): Promise<Step>
   if (deps.devStarterBypass && user.active) return { step: "devCode" };
   const blocked = gate(user);
   if (blocked) return blocked;
-  if (deps.pinOnly) return { step: "pin" };
   if (await isStarterPin(user.pin_hash)) {
     // Starter PIN: skip the PIN step. Code goes to the email on file, or ask for one.
     if (!user.email) return { step: "starterEmail" };
@@ -348,7 +347,6 @@ export async function submitPin(deps: Deps, cellInput: unknown, pin: unknown): P
     if (!user) return { step: "create" };
     const blocked = gate(user);
     if (blocked) return blocked;
-    if (deps.pinOnly) return (await checkPin(deps, q, user, pin)) ?? startSession(deps, q, user.coach_id);
     // 1234 never logs anyone in (except with the local testing bypass).
     if (await isStarterPin(user.pin_hash)) {
       if (deps.devStarterBypass && pin === STARTER_PIN) return startSession(deps, q, user.coach_id);
@@ -356,7 +354,7 @@ export async function submitPin(deps: Deps, cellInput: unknown, pin: unknown): P
     }
     const wrong = await checkPin(deps, q, user, pin);
     if (wrong) return wrong;
-    if (!isVerified(user)) return { step: "verifyChoice", maskedEmail: user.email ? maskEmail(user.email) : null };
+    if (!deps.pinOnly && !isVerified(user)) return { step: "verifyChoice", maskedEmail: user.email ? maskEmail(user.email) : null };
     return startSession(deps, q, user.coach_id);
   });
   return result === "starter" ? lookupPhone(deps, cell) : result;

@@ -63,7 +63,7 @@ Same features, same rules. This file is the source of truth for behavior.
 5. **Forgot PIN?** (on the PIN step) → code goes **only** to the verified email → code + new PIN (twice, not 1234) → logged in, and the lockout is cleared. No verified email → "Please contact the Director."
 6. **Correct PIN, verified, but no Thunder role** → show **Request Access** button (sets ThunderRequest).
 
-**For now (until go-live): PIN only.** With `LOGIN_PIN_ONLY=true` in `.env.local`, the PIN on file is all it takes: phone → PIN → logged in. A PIN of 1234 on file works too (no Set Your PIN), and an unverified email doesn't matter. No PIN stored counts as 1234 (that is how the import saves a 1234 from the sheet). Wrong-PIN lockout, Active, and pending-request rules still apply. Create Account (a number not in the users list) still verifies the email with a 6-digit code, as above. Forgot PIN → "Please contact the Director to reset your PIN." Turn this off at go-live to bring back Set Your PIN and email verification.
+**For now (until go-live): PIN only.** With `LOGIN_PIN_ONLY=true` in `.env.local`, a person who has chosen their own PIN logs straight in with it: phone → PIN → logged in, even if their email isn't verified. Starter PIN 1234 (or no PIN stored, which is how the import saves 1234) still goes through step 2: email code → Set Your PIN. Wrong-PIN lockout, Active, and pending-request rules still apply. Create Account still verifies the email with a code. Forgot PIN → "Please contact the Director to reset your PIN." Turn this off at go-live to bring back email verification for everyone.
 
 ### Email codes
 - 6 digits, expire after 15 minutes.

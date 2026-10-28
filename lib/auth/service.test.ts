@@ -306,11 +306,19 @@ describe("PIN only (until go-live)", () => {
     expect(mail.sent).toHaveLength(0);
   });
 
-  it("a starter PIN 1234 on file works as the PIN, no Set Your PIN", async () => {
-    await addUser({ pin: "1234" });
-    expect(await auth.lookupPhone(deps, CELL)).toEqual({ step: "pin" });
-    token(await auth.submitPin(deps, CELL, "1234"));
-    expect(mail.sent).toHaveLength(0);
+  it("starter PIN 1234: email code, then Set Your PIN, then logged in with the email verified", async () => {
+    await addUser({ pin: "1234", verified: false });
+    expect(await auth.lookupPhone(deps, CELL)).toEqual({ step: "starterCode", maskedEmail: "e***@example.com" });
+    expect((await auth.submitPin(deps, CELL, "1234")).step).toBe("starterCode");
+    expectError(await auth.completeStarter(deps, CELL, mail.lastCode(), "1234", "1234"), MSG.pinStarter);
+    token(await auth.completeStarter(deps, CELL, mail.lastCode(), "2468", "2468"));
+    expect(await userRow()).toMatchObject({ verified_email: "earl@example.com" });
+    token(await auth.submitPin(deps, CELL, "2468"));
+  });
+
+  it("starter PIN with no email on file asks for one", async () => {
+    await addUser({ pin: null, email: null });
+    expect(await auth.lookupPhone(deps, CELL)).toEqual({ step: "starterEmail" });
   });
 
   it("wrong PINs still count and lock the number", async () => {
@@ -320,11 +328,10 @@ describe("PIN only (until go-live)", () => {
     expectError(await auth.submitPin(deps, CELL, "5678"), MSG.locked);
   });
 
-  it("no PIN stored means the starter PIN 1234", async () => {
+  it("no PIN stored counts as the starter PIN: email code, not a login", async () => {
     await addUser({ pin: null });
-    expect(await auth.lookupPhone(deps, CELL)).toEqual({ step: "pin" });
-    expectError(await auth.submitPin(deps, CELL, "5678"), /Wrong PIN/);
-    token(await auth.submitPin(deps, CELL, "1234"));
+    expect((await auth.lookupPhone(deps, CELL)).step).toBe("starterCode");
+    expect((await auth.submitPin(deps, CELL, "1234")).step).toBe("starterCode");
   });
 
   it("inactive and pending people are still stopped", async () => {
