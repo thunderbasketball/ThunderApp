@@ -2,10 +2,10 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { currentUser, devBypass } from "@/lib/auth/server";
 import { listVolunteerCoaches } from "@/lib/coaches";
-import { formatCell } from "@/lib/phone";
 import { gradeLabel } from "@/lib/grades";
 import AppHeader from "../AppHeader";
-import { Chip, EmailLink, GroupCard, PageTitle, PersonRow, PhoneLink, Stats } from "../ui";
+import { ContactChip, GroupTextButton } from "../Contacts";
+import { GroupCard, PageTitle, Stats } from "../ui";
 
 export default function CoachesPage() {
   return (
@@ -29,6 +29,9 @@ async function Coaches() {
       <AppHeader user={user} tab="coaches" context="director" />
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6">
         <PageTitle title="Volunteer coaches" subtitle="Parents who offered to coach at registration" />
+        <div className="mb-4">
+          <GroupTextButton cells={all.map((c) => c.cell)} label="Text all volunteers" />
+        </div>
         <Stats
           items={[
             { label: "Volunteers", value: all.length },
@@ -41,25 +44,19 @@ async function Coaches() {
           {groups.map((g) => (
             <GroupCard key={`${g.gender}-${g.grade}`} title={`${g.gender} · ${gradeLabel(g.grade)}`} count={g.coaches.length}>
               {g.coaches.map((c) => (
-                <PersonRow
-                  key={c.registrantId}
-                  first={c.firstName ?? "No parent name"}
-                  last={c.lastName}
-                  avatarTone={c.isHead ? "green" : "amber"}
-                  chips={<Chip tone={c.isHead ? "green" : "amber"}>{c.role}</Chip>}
-                >
-                  {c.cell && c.cell.length === 10 && (
-                    <p>
-                      <PhoneLink cell={c.cell} label={formatCell(c.cell)} />
-                    </p>
-                  )}
-                  {c.email && (
-                    <p className="truncate">
-                      <EmailLink email={c.email} />
-                    </p>
-                  )}
-                  <p>Player: {c.playerName}</p>
-                </PersonRow>
+                <li key={c.registrantId} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 px-4 py-2.5">
+                  <ContactChip
+                    person={{
+                      role: c.isHead ? "HeadCoach" : "AsstCoach",
+                      first: c.firstName,
+                      last: c.lastName,
+                      cell: c.cell,
+                      email: c.email,
+                    }}
+                    about={`Parent of ${c.playerName}`}
+                  />
+                  <span className="text-sm text-zinc-500 dark:text-zinc-400">Player: {c.playerName}</span>
+                </li>
               ))}
             </GroupCard>
           ))}

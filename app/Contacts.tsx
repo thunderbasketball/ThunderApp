@@ -2,7 +2,7 @@
 
 import { useRef } from "react";
 import type { Contact } from "@/lib/teams";
-import { CloseButton, dialogCls } from "../client-ui";
+import { CloseButton, dialogCls } from "./client-ui";
 
 type Role = Contact["role"];
 
@@ -27,8 +27,13 @@ export function RoleDot({ role }: { role: Role }) {
   );
 }
 
+type Person = Pick<Contact, "role" | "email"> & { first: string | null; last: string | null; cell: string | null };
+
 // A role circle and the person's name; tapping the name opens their contact card.
-export function ContactChip({ person, team }: { person: Contact; team: string }) {
+// `about` is the line under their name on the card (team, or the player they registered).
+export function ContactChip({ person, about }: { person: Person; about: string }) {
+  const cell = person.cell && /^\d{10}$/.test(person.cell) ? person.cell : null;
+  const name = [person.first, person.last].filter(Boolean).join(" ") || "No name";
   const dialog = useRef<HTMLDialogElement>(null);
   const close = () => dialog.current?.close();
   const action =
@@ -41,9 +46,7 @@ export function ContactChip({ person, team }: { person: Contact; team: string })
         className="inline-flex items-center gap-1.5 rounded-full py-0.5 pr-2 pl-0.5 text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-white/5"
       >
         <RoleDot role={person.role} />
-        <span className="underline decoration-zinc-300 underline-offset-2">
-          {person.first} {person.last}
-        </span>
+        <span className="underline decoration-zinc-300 underline-offset-2">{name}</span>
       </button>
       <dialog ref={dialog} className={dialogCls} onClick={(e) => e.target === dialog.current && close()}>
         <div className="space-y-4 p-5">
@@ -51,27 +54,29 @@ export function ContactChip({ person, team }: { person: Contact; team: string })
             <div className="flex items-center gap-3">
               <RoleDot role={person.role} />
               <div>
-                <h2 className="text-lg font-semibold">
-                  {person.first} {person.last}
-                </h2>
+                <h2 className="text-lg font-semibold">{name}</h2>
                 <p className="text-sm text-zinc-500">
-                  {ROLE_BADGE[person.role].label} · {team}
+                  {ROLE_BADGE[person.role].label} · {about}
                 </p>
               </div>
             </div>
             <CloseButton onClick={close} />
           </div>
           <div className="space-y-1 text-sm">
-            <p>{pretty(person.cell)}</p>
+            {cell ? <p>{pretty(cell)}</p> : <p className="text-zinc-400">No cell on file</p>}
             {person.email ? <p className="break-all">{person.email}</p> : <p className="text-zinc-400">No email on file</p>}
           </div>
           <div className="flex gap-2">
-            <a href={`tel:+1${person.cell}`} className={action}>
-              📞 Call
-            </a>
-            <a href={`sms:+1${person.cell}`} className={action}>
-              💬 Text
-            </a>
+            {cell && (
+              <>
+                <a href={`tel:+1${cell}`} className={action}>
+                  📞 Call
+                </a>
+                <a href={`sms:+1${cell}`} className={action}>
+                  💬 Text
+                </a>
+              </>
+            )}
             {person.email && (
               <a href={`mailto:${encodeURIComponent(person.email)}`} className={action}>
                 ✉️ Email
@@ -86,8 +91,8 @@ export function ContactChip({ person, team }: { person: Contact; team: string })
 
 // Opens the phone's Messages app with everyone in one group text. iPhones/Macs and Android phones
 // expect different link formats.
-export function GroupTextButton({ cells, label }: { cells: string[]; label: string }) {
-  const numbers = [...new Set(cells)].map((c) => `+1${c}`);
+export function GroupTextButton({ cells, label }: { cells: (string | null)[]; label: string }) {
+  const numbers = [...new Set(cells.filter((c): c is string => !!c && /^\d{10}$/.test(c)))].map((c) => `+1${c}`);
   return (
     <button
       type="button"

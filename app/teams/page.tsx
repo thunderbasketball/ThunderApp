@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 import { listTeams, type TeamListItem } from "@/lib/teams";
 import AppHeader from "../AppHeader";
 import { Chip, GroupCard, PageTitle, Stats } from "../ui";
-import { ContactChip, GroupTextButton } from "./Contacts";
+import { ContactChip, GroupTextButton } from "../Contacts";
 
 export default function TeamsPage() {
   return (
@@ -90,7 +90,7 @@ async function Teams() {
                   </Link>
                   <div className="mt-1.5 flex flex-wrap gap-x-1 gap-y-1 pl-12">
                     {t.staff.map((p) => (
-                      <ContactChip key={p.role} person={p} team={t.name} />
+                      <ContactChip key={p.role} person={p} about={t.name} />
                     ))}
                     {!t.headCoach && <p className="text-sm text-amber-700 dark:text-amber-400">No head coach yet</p>}
                   </div>
