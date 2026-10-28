@@ -5,6 +5,7 @@ import { currentUser, devBypass } from "@/lib/auth/server";
 import { db } from "@/lib/db";
 import { getEvent } from "@/lib/events";
 import AppHeader from "../../AppHeader";
+import ChatLink from "../../ChatLink";
 import { eventWhen } from "../format";
 import CheckIn from "./CheckIn";
 import EventTools from "./EventTools";
@@ -31,7 +32,10 @@ async function Event({ params }: { params: PageProps<"/events/[id]">["params"] }
         <Link href="/events" className="text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-white">
           ← Events
         </Link>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">{event.name}</h1>
+        <div className="mt-2 flex items-start justify-between gap-3">
+          <h1 className="text-2xl font-semibold tracking-tight">{event.name}</h1>
+          <ChatLink chatKey={`event-${event.id}`} label="Chat with this event's check-in people" size="md" />
+        </div>
         <p className="text-sm text-zinc-500 dark:text-zinc-400">
           {eventWhen(event.startsAt)}
           {event.location && ` · ${event.location}`}

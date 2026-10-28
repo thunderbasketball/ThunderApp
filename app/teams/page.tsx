@@ -7,6 +7,7 @@ import { listTeams, type TeamListItem } from "@/lib/teams";
 import AppHeader from "../AppHeader";
 import { Chip, GroupCard, PageTitle, Stats } from "../ui";
 import { ContactChip, GroupTextButton } from "../Contacts";
+import ChatLink from "../ChatLink";
 import NotifyButton from "../NotifyButton";
 
 export default function TeamsPage() {
@@ -94,10 +95,18 @@ async function Teams() {
                   <div className="mt-1.5 flex items-start gap-2 pl-12">
                     <div className="flex flex-1 flex-wrap gap-x-1 gap-y-1">
                       {t.staff.map((p) => (
-                        <ContactChip key={p.role} person={p} about={t.name} />
+                        <ContactChip
+                          key={p.role}
+                          person={p}
+                          about={t.name}
+                          chatKey={p.role === "HeadCoach" || p.role === "AsstCoach" ? `coach-${p.coachId}` : undefined}
+                        />
                       ))}
                       {!t.headCoach && <p className="text-sm text-amber-700 dark:text-amber-400">No head coach yet</p>}
                     </div>
+                    {t.staff.some((p) => p.role === "HeadCoach" || p.role === "AsstCoach") && (
+                      <ChatLink chatKey={`teamcoaches-${t.id}`} label={`Chat with ${t.name} coaches`} />
+                    )}
                     {t.staff.length > 0 && <NotifyButton audience={{ teams: [t.id] }} to={t.name} />}
                   </div>
                 </li>

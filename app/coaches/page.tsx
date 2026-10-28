@@ -106,7 +106,11 @@ async function Coaches({ searchParams }: { searchParams: PageProps<"/coaches">["
           <GroupCard title={section.title} count={people.length}>
             {people.map((p) => (
               <li key={p.coachId} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 px-4 py-2.5">
-                <ContactChip person={{ role: section.key as Role, ...p }} about={p.teams.join(", ")} />
+                <ContactChip
+                  person={{ role: section.key as Role, ...p }}
+                  about={p.teams.join(", ")}
+                  chatKey={section.key === "HeadCoach" || section.key === "AsstCoach" ? `coach-${p.coachId}` : undefined}
+                />
                 <span className="text-sm text-zinc-500 dark:text-zinc-400">{p.teams.join(", ")}</span>
               </li>
             ))}

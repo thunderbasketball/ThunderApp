@@ -5,6 +5,7 @@
 //   team-<id>        that team's staff + Directors
 //   teamcoaches-<id> that team's Head and Assistant Coaches + Directors
 //   coach-<id>       one coach + the Directors
+//   event-<id>       the event's check-in people + Directors (started from the event)
 // A "coach" has the Coach role or is a Head or Assistant Coach on a team. Directors can open every chat.
 import type { Pool } from "pg";
 import type { SessionUser } from "./auth/service";
@@ -19,7 +20,7 @@ export const EMAIL_AFTER_HOURS = 8;
 const HOUR = 3_600_000;
 const MAX_BODY = 2000;
 
-type Ctx = { coachId: string; director: boolean; coach: boolean; teams: { id: string; name: string; coach: boolean }[] };
+type Ctx = { coachId: string; director: boolean; coach: boolean; teams: { id: string; name: string; coach: boolean }[]; events: string[] };
 
 // Roles fresh from the database (for the viewer, or anyone when working out who gets an email).
 async function contextFor(q: Q, coachId: string): Promise<Ctx | null> {
@@ -33,16 +34,24 @@ async function contextFor(q: Q, coachId: string): Promise<Ctx | null> {
      from team_staff s join teams t on t.id = s.team_id where s.coach_id = $1 group by t.id order by t.grade_sort, lower(t.name)`,
     [coachId],
   );
-  return { coachId, director: u.rows[0].director, coach: u.rows[0].coach || t.rows.some((x) => x.coach), teams: t.rows };
+  const e = await q.query<{ id: string }>("select event_id::text as id from event_staff where coach_id = $1", [coachId]);
+  return {
+    coachId,
+    director: u.rows[0].director,
+    coach: u.rows[0].coach || t.rows.some((x) => x.coach),
+    teams: t.rows,
+    events: e.rows.map((x) => x.id),
+  };
 }
 
-type Key = { kind: "directors" | "everyone" | "coaches" } | { kind: "team" | "teamcoaches"; id: string } | { kind: "coach"; id: string };
+type Key =
+  { kind: "directors" | "everyone" | "coaches" } | { kind: "team" | "teamcoaches" | "event"; id: string } | { kind: "coach"; id: string };
 
 export function parseKey(key: unknown): Key | null {
   if (typeof key !== "string") return null;
   if (key === "directors" || key === "everyone" || key === "coaches") return { kind: key };
-  const m = key.match(/^(team|teamcoaches)-(\d{1,18})$/);
-  if (m) return { kind: m[1] as "team" | "teamcoaches", id: m[2] };
+  const m = key.match(/^(team|teamcoaches|event)-(\d{1,18})$/);
+  if (m) return { kind: m[1] as "team" | "teamcoaches" | "event", id: m[2] };
   const c = key.match(/^coach-(\d{7})$/);
   return c ? { kind: "coach", id: c[1] } : null;
 }
@@ -63,6 +72,8 @@ function access(ctx: Ctx, key: Key): { member: boolean; seen: boolean } {
         return ctx.director || ctx.teams.some((t) => t.id === key.id && t.coach);
       case "coach":
         return ctx.director || (ctx.coach && key.id === ctx.coachId);
+      case "event":
+        return ctx.director || ctx.events.includes(key.id);
     }
   })();
   return { member, seen: member || ctx.director };
@@ -83,6 +94,10 @@ async function titleOf(q: Q, ctx: Ctx, k: Key): Promise<string | null> {
     case "teamcoaches": {
       const t = await q.query<{ name: string }>("select name from teams where id = $1", [k.id]);
       return t.rows[0] ? `${t.rows[0].name} · ${k.kind === "team" ? "Team" : "Coaches"}` : null;
+    }
+    case "event": {
+      const e = await q.query<{ name: string }>("select name from events where id = $1", [k.id]);
+      return e.rows[0] ? `${e.rows[0].name} · Event` : null;
     }
     case "coach": {
       if (!ctx.director) return "Directors";
@@ -202,6 +217,7 @@ const MEMBERS: Record<Key["kind"], string> = {
   teamcoaches:
     "u.thunder_director or exists (select 1 from team_staff s where s.coach_id = u.coach_id and s.team_id = $1 and s.role in ('HeadCoach', 'AsstCoach'))",
   coach: "u.thunder_director or u.coach_id = $1",
+  event: "u.thunder_director or exists (select 1 from event_staff s where s.coach_id = u.coach_id and s.event_id = $1)",
 };
 const IS_COACH =
   "(u.thunder_coach or exists (select 1 from team_staff s where s.coach_id = u.coach_id and s.role in ('HeadCoach', 'AsstCoach')))";

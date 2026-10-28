@@ -5,6 +5,7 @@ import { currentUser, devBypass } from "@/lib/auth/server";
 import { db } from "@/lib/db";
 import { getPractice } from "@/lib/practice-attendance";
 import AppHeader from "../../../AppHeader";
+import ChatLink from "../../../ChatLink";
 import CheckIn from "../../[id]/CheckIn";
 import { eventWhen } from "../../format";
 
@@ -30,7 +31,10 @@ async function PracticeCheckIn({ params }: { params: PageProps<"/events/practice
         <Link href="/events" className="text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-white">
           ← Events
         </Link>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">Practice – {practice.teamName}</h1>
+        <div className="mt-2 flex items-start justify-between gap-3">
+          <h1 className="text-2xl font-semibold tracking-tight">Practice – {practice.teamName}</h1>
+          <ChatLink chatKey={`team-${practice.teamId}`} label={`Chat with ${practice.teamName}`} size="md" />
+        </div>
         <p className="text-sm text-zinc-500 dark:text-zinc-400">
           {eventWhen(practice.startsAt)} · {practice.gym} {practice.court}
         </p>

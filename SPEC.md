@@ -234,6 +234,9 @@ A chat bubble in the header (everyone with a role) shows unread chat messages an
 | <team> · Team | that team's staff (all roles) + Directors | the team's staff, Directors |
 | <team> · Coaches | that team's Head and Assistant Coaches + Directors | Directors, those coaches |
 | <coach> · Directors | one coach + the Directors (the coach sees it as "Directors") | that coach, Directors |
+| <event> · Event | the event's check-in people + Directors | from the event page (Directors, its check-in people) |
+
+**Chat buttons** (blue chat icon) open a chat straight from where you are: a **team card** → that team's coaches; a **user card** on Users (coaches only) and the **💬 Chat** button on a coach's contact card → that coach's chat with the Directors; an **event** page → the event chat (players and parents have no logins, so it's for the people running it); a **practice** check-in page → that team's chat.
 
 - A "coach" has the Coach role or is a Head or Assistant Coach on a team. Members follow current roles and team staff, so changes apply at once. **Directors can open every chat.** Team Parents and Managers are only in their team chats.
 - Messages (up to 2,000 characters) show oldest to newest with sender and time; the open chat checks for new messages every 5 seconds. Opening a chat marks it read (not while viewing as someone; posting is refused then too). Enter sends on a keyboard; phones use Send.

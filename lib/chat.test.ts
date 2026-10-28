@@ -92,6 +92,23 @@ describe("chat", () => {
     expect(await post(dir, "coach-5550003")).toEqual({ ok: false, message: "That person isn't an active coach." }); // Pam isn't a coach
   });
 
+  it("an event chat is the event's check-in people + Directors", async () => {
+    const e = await db.pool.query<{ id: string }>(
+      `insert into events (name, starts_at, genders, grades, created_by) values ('Tryouts – Girls Grade 4', now(), '{Girls}', '{4}', 'x') returning id::text`,
+    );
+    const id = e.rows[0].id;
+    await db.pool.query("insert into event_staff (event_id, coach_id, added_by) values ($1, '5550004', 'x')", [id]);
+    expect(await post(max, `event-${id}`, "Doors open 8:45")).toMatchObject({ ok: true });
+    expect(await post(cal, `event-${id}`)).toMatchObject({ ok: false });
+    expect(await getChat(deps(), dir, `event-${id}`)).toMatchObject({
+      title: "Tryouts – Girls Grade 4 · Event",
+      members: ["Dee X", "Max X"],
+    });
+    expect(await chatUnreadCount(deps(), dir)).toBe(1);
+    await db.pool.query("delete from events where id = $1", [id]);
+    expect(await getChat(deps(), dir, `event-${id}`)).toBeNull(); // event deleted: chat gone
+  });
+
   it("checks the message and the chat key", async () => {
     expect(await postMessage(deps(), cal, "everyone", "   ")).toEqual({ ok: false, message: "Type a message." });
     expect(await postMessage(deps(), cal, "everyone", "x".repeat(2001))).toMatchObject({ ok: false });

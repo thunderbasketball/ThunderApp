@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef } from "react";
+import Link from "next/link";
 import type { Contact } from "@/lib/teams";
 import { CloseButton, dialogCls } from "./client-ui";
 
@@ -31,7 +32,8 @@ type Person = Pick<Contact, "role" | "email"> & { first: string | null; last: st
 
 // A role circle and the person's name; tapping the name opens their contact card.
 // `about` is the line under their name on the card (team, or the player they registered).
-export function ContactChip({ person, about }: { person: Person; about: string }) {
+// `chatKey`: an in-app chat with this person (coaches with a login).
+export function ContactChip({ person, about, chatKey }: { person: Person; about: string; chatKey?: string }) {
   const cell = person.cell && /^\d{10}$/.test(person.cell) ? person.cell : null;
   const name = [person.first, person.last].filter(Boolean).join(" ") || "No name";
   const dialog = useRef<HTMLDialogElement>(null);
@@ -67,13 +69,18 @@ export function ContactChip({ person, about }: { person: Person; about: string }
             {person.email ? <p className="break-all">{person.email}</p> : <p className="text-zinc-400">No email on file</p>}
           </div>
           <div className="flex gap-2">
+            {chatKey && (
+              <Link href={`/chat/${chatKey}`} className={action}>
+                💬 Chat
+              </Link>
+            )}
             {cell && (
               <>
                 <a href={`tel:+1${cell}`} className={action}>
                   📞 Call
                 </a>
                 <a href={`sms:+1${cell}`} className={action}>
-                  💬 Text
+                  📱 Text
                 </a>
               </>
             )}

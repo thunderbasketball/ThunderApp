@@ -2,6 +2,7 @@ import { formatCell } from "@/lib/phone";
 import type { SessionUser } from "@/lib/auth/service";
 import { deleteBlocker } from "@/lib/user-admin";
 import type { UserListItem } from "@/lib/users";
+import ChatLink from "./ChatLink";
 import { AddUserButton, EditUserButton } from "./users/UserEditor";
 import { Chip, EmailLink, GroupCard, PageTitle, PersonRow, PhoneLink, Stats } from "./ui";
 
@@ -47,7 +48,12 @@ export default function UserList({ users, viewer }: { users: UserListItem[]; vie
               </Chip>
             ))}
           </div>
-          <EditUserButton user={u} isSelf={u.coachId === viewer.coachId} deleteBlocker={deleteBlocker(u, viewer)} />
+          <div className="flex shrink-0 items-center gap-2">
+            {u.active && u.coachId !== viewer.coachId && (u.coach || u.teams.some((t) => /(Head|Assistant) Coach$/.test(t))) && (
+              <ChatLink chatKey={`coach-${u.coachId}`} label={`Chat with ${u.firstName} ${u.lastName}`} />
+            )}
+            <EditUserButton user={u} isSelf={u.coachId === viewer.coachId} deleteBlocker={deleteBlocker(u, viewer)} />
+          </div>
         </div>
       </PersonRow>
     ));
