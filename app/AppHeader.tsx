@@ -5,9 +5,10 @@ import { LogoutButton } from "./HomeActions";
 import { Avatar } from "./ui";
 
 // Sticky top bar: logo, the user's name and roles, and Director tabs. (Full role/team switching comes in Phase 3.)
-export default function AppHeader({ user, tab }: { user: SessionUser; tab?: "users" | "players" | "coaches" }) {
+export default function AppHeader({ user, tab }: { user: SessionUser; tab?: "teams" | "users" | "players" | "coaches" }) {
   const roles = [user.isDirector && "Director", user.isCoach && "Coach"].filter(Boolean) as string[];
   const tabs = [
+    { key: "teams", href: "/teams", label: "Teams" },
     { key: "users", href: "/", label: "Users" },
     { key: "players", href: "/players", label: "Players" },
     { key: "coaches", href: "/coaches", label: "Coaches" },

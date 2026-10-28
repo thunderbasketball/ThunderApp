@@ -102,8 +102,10 @@ Same features, same rules. This file is the source of truth for behavior.
 
 ## 3. Teams
 
-- Name format: grade + gender + head coach's last name, e.g. "4G Epps".
-- Fields: name, allowed grades (one or more), gender, staff list (user + role).
+- Name format: grade + gender + head coach's last name, e.g. "4G Epps". A multi-grade team uses its top grade (e.g. "8G Black" for 7th–8th). Names are unique.
+- Fields: name, allowed grades (one or more), gender, level (REC or COMP), staff list (user + role), created by.
+- **Create team** (Director): pick gender, grades, level, and a head coach. The head coach is an app user or a registration volunteer (parent who offered to coach). Picking a volunteer creates their login (starter PIN 1234, Coach role) from their registration cell and email; refused if their cell's last 7 digits match another user. Becoming a head coach grants the Coach role.
+- The 14 teams in the sheet's Teams tab are imported once (with a dry run first).
 - **Team dashboard**: staff, upcoming scheduled practices, players this team marked Interested, rostered players.
 - HeadCoach and Director can edit staff.
 

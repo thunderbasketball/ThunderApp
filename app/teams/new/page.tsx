@@ -1,0 +1,39 @@
+import { Suspense } from "react";
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { currentUser, devBypass } from "@/lib/auth/server";
+import { db } from "@/lib/db";
+import { headCoachOptions } from "@/lib/teams";
+import AppHeader from "../../AppHeader";
+import { PageTitle } from "../../ui";
+import NewTeamForm from "./NewTeamForm";
+
+export default function NewTeamPage() {
+  return (
+    <Suspense fallback={<p className="p-4 text-zinc-500">Loading…</p>}>
+      <NewTeam />
+    </Suspense>
+  );
+}
+
+async function NewTeam() {
+  const user = await currentUser();
+  if (!user) redirect(devBypass ? "/dev-login" : "/login");
+  if (!user.isDirector) redirect("/");
+
+  const options = await headCoachOptions({ pool: db, now: () => new Date() }, user);
+  return (
+    <>
+      <AppHeader user={user} tab="teams" />
+      <main className="mx-auto w-full max-w-xl flex-1 px-4 py-6">
+        <Link href="/teams" className="text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-white">
+          ← Teams
+        </Link>
+        <div className="mt-2">
+          <PageTitle title="New team" subtitle="The name is made for you: top grade + gender + head coach's last name" />
+        </div>
+        <NewTeamForm users={options.users} volunteers={options.volunteers} />
+      </main>
+    </>
+  );
+}
