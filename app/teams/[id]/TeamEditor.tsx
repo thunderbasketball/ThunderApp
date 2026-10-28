@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { GRADES, LEVELS } from "@/lib/team-names";
 import type { PersonOption, Role } from "@/lib/teams";
 import { addStaff, removeStaff, updateTeam } from "../actions";
-import { card, fieldLabel, inputCls, pillCls, primaryBtn } from "../../ui";
+import { fieldLabel, inputCls, pillCls, primaryBtn } from "../../ui";
 
 const ROLE_CHOICES: { role: Role; label: string }[] = [
   { role: "HeadCoach", label: "Head Coach" },
@@ -44,7 +44,11 @@ export function TeamEditForm({
 
   if (!open)
     return (
-      <button type="button" onClick={() => setOpen(true)} className="mt-4 text-sm font-medium text-thunder-blue hover:underline dark:text-blue-400">
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="mt-4 text-sm font-medium text-thunder-blue hover:underline dark:text-blue-400"
+      >
         Edit team details
       </button>
     );
@@ -79,7 +83,13 @@ export function TeamEditForm({
         <span className={fieldLabel}>Grades</span>
         <div className="grid grid-cols-7 gap-2">
           {GRADES.map((g) => (
-            <button key={g} type="button" aria-pressed={grades.includes(g)} className={`${pillCls(grades.includes(g))} px-0`} onClick={() => toggle(g)}>
+            <button
+              key={g}
+              type="button"
+              aria-pressed={grades.includes(g)}
+              className={`${pillCls(grades.includes(g))} px-0`}
+              onClick={() => toggle(g)}
+            >
               {g}
             </button>
           ))}
@@ -97,7 +107,12 @@ export function TeamEditForm({
       </div>
       <label className="block">
         <span className={fieldLabel}>Practice locations (comma separated)</span>
-        <input className={inputCls} value={locations} onChange={(e) => setLocations(e.target.value)} placeholder="Action Church, East Ridge MS" />
+        <input
+          className={inputCls}
+          value={locations}
+          onChange={(e) => setLocations(e.target.value)}
+          placeholder="Action Church, East Ridge MS"
+        />
       </label>
       <p className="text-xs text-zinc-500">The team name updates to match the grades, gender and head coach.</p>
       {error && <Alert tone="red">{error}</Alert>}
@@ -105,7 +120,11 @@ export function TeamEditForm({
         <button type="submit" disabled={busy || !grades.length} className={primaryBtn}>
           {busy ? "Saving…" : "Save"}
         </button>
-        <button type="button" onClick={() => setOpen(false)} className="rounded-xl px-4 text-sm font-medium text-zinc-600 ring-1 ring-zinc-950/10 dark:text-zinc-300 dark:ring-white/15">
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          className="rounded-xl px-4 text-sm font-medium text-zinc-600 ring-1 ring-zinc-950/10 dark:text-zinc-300 dark:ring-white/15"
+        >
           Cancel
         </button>
       </div>
@@ -138,7 +157,8 @@ export function RemoveStaffButton({ teamId, coachId, role, label }: { teamId: st
 
 const NEW = "new";
 
-export function AddStaffForm({
+// "+ Add staff" button on the Staff card; opens the form in a pop-up.
+export function AddStaffButton({
   teamId,
   gender,
   grades,
@@ -167,6 +187,8 @@ export function AddStaffForm({
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const [busy, start] = useTransition();
+  const dialog = useRef<HTMLDialogElement>(null);
+  const close = () => dialog.current?.close();
 
   const matches = (v: PersonOption) => v.gender === gender && grades.includes(v.grade ?? "");
   const option = (o: PersonOption) => (
@@ -176,86 +198,156 @@ export function AddStaffForm({
   );
   const ready = person === NEW ? p.first && p.last && p.cell : !!person;
 
-  if (!role)
-    return (
-      <p className={`${card} p-5 text-sm text-zinc-500`}>
-        {done ?? "All staff roles are filled. Remove someone to add a different person."}
-      </p>
-    );
+  // Every role filled: no button (the Director can still replace the head coach, so they keep it).
+  if (!role) return done ? <Toast key={done} message={done} /> : null;
 
   return (
-    <form
-      className={`${card} space-y-5 p-5`}
-      onSubmit={(e) => {
-        e.preventDefault();
-        setError(null);
-        setDone(null);
-        if (role === "HeadCoach" && hasHead && !confirm("This replaces the current head coach and renames the team. Continue?")) return;
-        start(async () => {
-          const r = await addStaff(teamId, { role, person: person === NEW ? p : person });
-          if (!r.ok) return setError(r.message);
-          if ("who" in r)
-            setDone(`${r.who} added as ${ROLE_CHOICES.find((x) => x.role === role)?.label}.${r.newLogin ? " They can now log in with PIN 1234." : ""}`);
-          setP({ first: "", last: "", cell: "", email: "" });
-          setPerson(pickList ? "" : NEW);
-          router.refresh();
-        });
-      }}
-    >
-      <h2 className="font-semibold">Add staff</h2>
-      <div>
-        <span className={fieldLabel}>Role</span>
-        <div className="flex flex-wrap gap-2">
-          {roles.map((r) => (
-            <button key={r.role} type="button" className={pillCls(role === r.role)} onClick={() => setRole(r.role)}>
-              {r.label}
-            </button>
-          ))}
-        </div>
-        {role === "HeadCoach" && hasHead && <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">This replaces the current head coach.</p>}
-      </div>
-
-      <label className="block">
-        <span className={fieldLabel}>Person</span>
-        <select className={inputCls} value={person} onChange={(e) => setPerson(e.target.value)}>
-          {pickList && <option value="">Choose…</option>}
-          <option value={NEW}>+ New person (not in the app yet)</option>
-          {volunteers.some(matches) && <optgroup label="Volunteers for this team">{volunteers.filter(matches).map(option)}</optgroup>}
-          {volunteers.some((v) => !matches(v)) && <optgroup label="Other volunteers">{volunteers.filter((v) => !matches(v)).map(option)}</optgroup>}
-          {users.length > 0 && <optgroup label="App users">{users.map(option)}</optgroup>}
-        </select>
-      </label>
-
-      {person === NEW && (
-        <div className="space-y-3 rounded-xl bg-zinc-50 p-4 dark:bg-zinc-800/50">
-          <div className="grid grid-cols-2 gap-3">
-            <label className="block">
-              <span className={fieldLabel}>First name</span>
-              <input className={inputCls} autoComplete="off" value={p.first} onChange={(e) => setP({ ...p, first: e.target.value })} />
-            </label>
-            <label className="block">
-              <span className={fieldLabel}>Last name</span>
-              <input className={inputCls} autoComplete="off" value={p.last} onChange={(e) => setP({ ...p, last: e.target.value })} />
-            </label>
-          </div>
-          <label className="block">
-            <span className={fieldLabel}>Cell</span>
-            <input className={inputCls} type="tel" inputMode="tel" autoComplete="off" placeholder="(423) 555-1234" value={p.cell} onChange={(e) => setP({ ...p, cell: e.target.value })} />
-          </label>
-          <label className="block">
-            <span className={fieldLabel}>Email (for their login code)</span>
-            <input className={inputCls} type="email" autoComplete="off" value={p.email} onChange={(e) => setP({ ...p, email: e.target.value })} />
-          </label>
-          <p className="text-xs text-zinc-500">If this cell is already in the app, that person is used. Otherwise they get a login with PIN 1234.</p>
-        </div>
-      )}
-      {person.startsWith("volunteer:") && <p className="text-xs text-zinc-500">This volunteer will get a login (PIN 1234) from their registration cell and email.</p>}
-
-      {error && <Alert tone="red">{error}</Alert>}
-      {done && <Alert tone="green">{done}</Alert>}
-      <button type="submit" disabled={busy || !ready} className={primaryBtn}>
-        {busy ? "Adding…" : "Add to team"}
+    <>
+      <button
+        type="button"
+        onClick={() => {
+          setError(null);
+          dialog.current?.showModal();
+        }}
+        className="rounded-full bg-thunder-blue px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-thunder-blue-dark"
+      >
+        + Add staff
       </button>
-    </form>
+      {done && <Toast key={done} message={done} />}
+      <dialog
+        ref={dialog}
+        className="m-auto max-h-[90dvh] w-[calc(100%-2rem)] max-w-lg overflow-y-auto rounded-2xl bg-white p-0 text-zinc-900 shadow-xl backdrop:bg-zinc-950/40 backdrop:backdrop-blur-sm dark:bg-zinc-900 dark:text-zinc-100"
+        onClick={(e) => e.target === dialog.current && close()}
+      >
+        <form
+          className="space-y-5 p-5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            setError(null);
+            setDone(null);
+            if (role === "HeadCoach" && hasHead && !confirm("This replaces the current head coach and renames the team. Continue?")) return;
+            start(async () => {
+              const r = await addStaff(teamId, { role, person: person === NEW ? p : person });
+              if (!r.ok) return setError(r.message);
+              if ("who" in r)
+                setDone(
+                  `${r.who} added as ${ROLE_CHOICES.find((x) => x.role === role)?.label}.${r.newLogin ? " They can now log in with PIN 1234." : ""}`,
+                );
+              setP({ first: "", last: "", cell: "", email: "" });
+              setPerson(pickList ? "" : NEW);
+              setRole(null);
+              close();
+              router.refresh();
+            });
+          }}
+        >
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold">Add staff</h2>
+            <button
+              type="button"
+              onClick={close}
+              aria-label="Close"
+              className="-mr-2 rounded-full p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800"
+            >
+              <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden className="size-5">
+                <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
+              </svg>
+            </button>
+          </div>
+          <div>
+            <span className={fieldLabel}>Role</span>
+            <div className="flex flex-wrap gap-2">
+              {roles.map((r) => (
+                <button key={r.role} type="button" className={pillCls(role === r.role)} onClick={() => setRole(r.role)}>
+                  {r.label}
+                </button>
+              ))}
+            </div>
+            {role === "HeadCoach" && hasHead && (
+              <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">This replaces the current head coach.</p>
+            )}
+          </div>
+
+          <label className="block">
+            <span className={fieldLabel}>Person</span>
+            <select className={inputCls} value={person} onChange={(e) => setPerson(e.target.value)}>
+              {pickList && <option value="">Choose…</option>}
+              <option value={NEW}>+ New person (not in the app yet)</option>
+              {volunteers.some(matches) && <optgroup label="Volunteers for this team">{volunteers.filter(matches).map(option)}</optgroup>}
+              {volunteers.some((v) => !matches(v)) && (
+                <optgroup label="Other volunteers">{volunteers.filter((v) => !matches(v)).map(option)}</optgroup>
+              )}
+              {users.length > 0 && <optgroup label="App users">{users.map(option)}</optgroup>}
+            </select>
+          </label>
+
+          {person === NEW && (
+            <div className="space-y-3 rounded-xl bg-zinc-50 p-4 dark:bg-zinc-800/50">
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block">
+                  <span className={fieldLabel}>First name</span>
+                  <input className={inputCls} autoComplete="off" value={p.first} onChange={(e) => setP({ ...p, first: e.target.value })} />
+                </label>
+                <label className="block">
+                  <span className={fieldLabel}>Last name</span>
+                  <input className={inputCls} autoComplete="off" value={p.last} onChange={(e) => setP({ ...p, last: e.target.value })} />
+                </label>
+              </div>
+              <label className="block">
+                <span className={fieldLabel}>Cell</span>
+                <input
+                  className={inputCls}
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="off"
+                  placeholder="(423) 555-1234"
+                  value={p.cell}
+                  onChange={(e) => setP({ ...p, cell: e.target.value })}
+                />
+              </label>
+              <label className="block">
+                <span className={fieldLabel}>Email (for their login code)</span>
+                <input
+                  className={inputCls}
+                  type="email"
+                  autoComplete="off"
+                  value={p.email}
+                  onChange={(e) => setP({ ...p, email: e.target.value })}
+                />
+              </label>
+              <p className="text-xs text-zinc-500">
+                If this cell is already in the app, that person is used. Otherwise they get a login with PIN 1234.
+              </p>
+            </div>
+          )}
+          {person.startsWith("volunteer:") && (
+            <p className="text-xs text-zinc-500">This volunteer will get a login (PIN 1234) from their registration cell and email.</p>
+          )}
+
+          {error && <Alert tone="red">{error}</Alert>}
+          <button type="submit" disabled={busy || !ready} className={primaryBtn}>
+            {busy ? "Adding…" : "Add to team"}
+          </button>
+        </form>
+      </dialog>
+    </>
+  );
+}
+
+// A short confirmation at the bottom of the screen; fades out after 5 seconds.
+function Toast({ message }: { message: string }) {
+  const [shown, setShown] = useState(true);
+  useEffect(() => {
+    const t = setTimeout(() => setShown(false), 5000);
+    return () => clearTimeout(t);
+  }, []);
+  if (!shown) return null;
+  return (
+    <p
+      role="status"
+      className="fixed inset-x-4 bottom-4 z-20 mx-auto max-w-md rounded-xl bg-zinc-900 px-4 py-3 text-sm text-white shadow-lg dark:bg-white dark:text-zinc-900"
+    >
+      {message}
+    </p>
   );
 }

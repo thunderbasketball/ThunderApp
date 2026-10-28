@@ -8,7 +8,7 @@ import { currentContexts } from "@/lib/contexts-server";
 import { getTeam, personOptions, roleLabel } from "@/lib/teams";
 import AppHeader from "../../AppHeader";
 import { Chip, EmailLink, PersonRow, PhoneLink, card } from "../../ui";
-import { AddStaffForm, RemoveStaffButton, TeamEditForm } from "./TeamEditor";
+import { AddStaffButton, RemoveStaffButton, TeamEditForm } from "./TeamEditor";
 
 export default function TeamPage({ params }: PageProps<"/teams/[id]">) {
   return (
@@ -72,13 +72,31 @@ async function Team({ params }: { params: PageProps<"/teams/[id]">["params"] }) 
           {canEditTeam && (
             <TeamEditForm
               teamId={team.id}
-              initial={{ gender: team.gender, grades: team.grades, level: team.level, practiceLocations: team.practiceLocations.join(", ") }}
+              initial={{
+                gender: team.gender,
+                grades: team.grades,
+                level: team.level,
+                practiceLocations: team.practiceLocations.join(", "),
+              }}
             />
           )}
         </section>
 
         <section className={`${card} overflow-hidden`}>
-          <h2 className="px-4 pt-4 pb-2 font-semibold">Staff ({team.staff.length})</h2>
+          <div className="flex items-center justify-between gap-3 px-4 pt-4 pb-3">
+            <h2 className="font-semibold">Staff ({team.staff.length})</h2>
+            {canEditStaff && (
+              <AddStaffButton
+                teamId={team.id}
+                gender={team.gender}
+                grades={team.grades}
+                canSetHead={asDirector}
+                filledRoles={team.staff.map((s) => s.role)}
+                users={options?.users ?? []}
+                volunteers={options?.volunteers ?? []}
+              />
+            )}
+          </div>
           {!team.staff.length && <p className="px-4 pb-4 text-sm text-zinc-500">No staff yet.</p>}
           <ul className="divide-y divide-zinc-100 border-t border-zinc-100 dark:divide-white/5 dark:border-white/5">
             {team.staff.map((s) => (
@@ -107,18 +125,6 @@ async function Team({ params }: { params: PageProps<"/teams/[id]">["params"] }) 
             ))}
           </ul>
         </section>
-
-        {canEditStaff && (
-          <AddStaffForm
-            teamId={team.id}
-            gender={team.gender}
-            grades={team.grades}
-            canSetHead={asDirector}
-            filledRoles={team.staff.map((s) => s.role)}
-            users={options?.users ?? []}
-            volunteers={options?.volunteers ?? []}
-          />
-        )}
       </main>
     </>
   );
