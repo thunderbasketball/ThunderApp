@@ -222,3 +222,10 @@ An orange bell opens a short pop-up (title + message) already addressed to that 
 ### Chats (planned)
 - Direct chat; team chat (that team's staff + Director, follows staff changes); Director-made groups. Coaches stay within their own teams' people and the Director. Same 8-hour email fallback.
 
+## 12. Events & check-in (built)
+- **Events** tab (Director): list of events, today and later first, past ones collapsed. Each shows date/time, location, player count, ✓/✗/? counts and who runs check-in.
+- **+ New event** (Director): name, date, start time (Eastern), location (gym suggestions or free text), notes, players expected by **gender** and **grade** (live count of matching registrations), and **who runs check-in** (any active app users).
+- The player list is copied from registrations when the event is created. **Update player list** (Director) adds players who registered since; it never removes anyone or changes a check-in. **Delete event** (warning, can't be undone).
+- **Check-in screen** (Director and the event's check-in people only; everyone else gets "not found"): players grouped by grade and gender, sorted by last name. Everyone starts at **?**; each tap goes **? → ✓ → ✗ → ?**. Counters for ✓ / ✗ / ? (tap to show only those) and a name search. Each change saves at once and records who made it and when ("Here · Hank Johnson, 9:41 AM"); going back to ? clears that. Other people's taps appear within 15 seconds.
+- People who run check-in for an event from yesterday on see a green **✓ Check-in** button in the header.
+

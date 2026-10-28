@@ -5,21 +5,28 @@ import { unreadCount } from "@/lib/announcements";
 import type { SessionUser } from "@/lib/auth/service";
 import { currentContexts } from "@/lib/contexts-server";
 import { db } from "@/lib/db";
+import { myEventCount } from "@/lib/events";
 import { syncIfStale } from "@/lib/teamsnap/scheduler";
 import { LogoutButton } from "./HomeActions";
 import { Avatar } from "./ui";
 
-type Tab = "teams" | "practice" | "users" | "players" | "coaches";
+type Tab = "teams" | "practice" | "events" | "users" | "players" | "coaches";
 
 // Sticky top bar: logo, the user, one chip per role to switch between them, and the Director tabs.
 // `context` is the role this page is shown as ("director" or "team:<id>"); it highlights that chip.
 export default async function AppHeader({ user, tab, context }: { user: SessionUser; tab?: Tab; context?: string }) {
-  const [{ contexts }, unread] = await Promise.all([currentContexts(user), unreadCount({ pool: db, now: () => new Date() }, user)]);
+  const deps = { pool: db, now: () => new Date() };
+  const [{ contexts }, unread, myEvents] = await Promise.all([
+    currentContexts(user),
+    unreadCount(deps, user),
+    user.isDirector ? 0 : myEventCount(deps, user),
+  ]);
   // Backup for the sheet timer: after this page is sent, refresh registrations if the last check is stale.
   after(syncIfStale);
   const tabs: { key: Tab; href: string; label: string }[] = [
     { key: "teams", href: "/teams", label: "Teams" },
     { key: "practice", href: "/practice", label: "Practice" },
+    { key: "events", href: "/events", label: "Events" },
     { key: "users", href: "/users", label: "Users" },
     { key: "players", href: "/players", label: "Players" },
     { key: "coaches", href: "/coaches", label: "Coaches" },
@@ -39,6 +46,14 @@ export default async function AppHeader({ user, tab, context }: { user: SessionU
           {user.isDirector && (
             <Link href="/preview" className="hidden text-sm font-medium text-thunder-blue hover:underline md:block dark:text-blue-400">
               Preview
+            </Link>
+          )}
+          {myEvents > 0 && (
+            <Link
+              href="/events"
+              className="rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-semibold whitespace-nowrap text-white hover:bg-emerald-700"
+            >
+              ✓ Check-in
             </Link>
           )}
           {user.hasThunderRole && (
@@ -96,13 +111,13 @@ export default async function AppHeader({ user, tab, context }: { user: SessionU
 
       {showTabs && (
         <nav className="mx-auto max-w-3xl px-4 pb-3">
-          <div className="flex rounded-full bg-zinc-100 p-1 sm:inline-flex dark:bg-zinc-900">
+          <div className="flex overflow-x-auto rounded-full bg-zinc-100 p-1 [scrollbar-width:none] sm:inline-flex dark:bg-zinc-900">
             {tabs.map((t) => (
               <Link
                 key={t.key}
                 href={t.href}
                 aria-current={tab === t.key ? "page" : undefined}
-                className={`flex-1 rounded-full px-3 py-1.5 text-center text-sm font-medium transition-colors sm:flex-none sm:px-6 ${
+                className={`shrink-0 grow rounded-full px-3 py-1.5 text-center text-sm font-medium whitespace-nowrap transition-colors sm:grow-0 sm:px-5 ${
                   tab === t.key
                     ? "bg-thunder-blue text-white shadow-sm"
                     : "text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white"
