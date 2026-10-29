@@ -28,18 +28,19 @@ body {
   color: var(--foreground);
 }
 
-/* Room at the bottom of the page for the phone tab bar, so it never covers the last row. */
+/* Room at the bottom of the page for the phone tab bar (tabs + the date strip under them),
+   so it never covers the last row. Matches the strip height in AppHeader. */
 @media (max-width: 639px) {
   body:has(#bottom-tabs) {
-    padding-bottom: calc(4rem + env(safe-area-inset-bottom));
+    padding-bottom: calc(4rem + max(3.75rem, env(safe-area-inset-bottom)));
   }
   /* The chat message box sits above the tab bar. */
   body:has(#bottom-tabs) .chat-composer {
-    bottom: calc(4rem + env(safe-area-inset-bottom));
+    bottom: calc(4rem + max(3.75rem, env(safe-area-inset-bottom)));
   }
   /* Pop-up messages sit above the tab bar. */
   body:has(#bottom-tabs) .toast {
-    bottom: calc(5rem + env(safe-area-inset-bottom));
+    bottom: calc(5rem + max(3.75rem, env(safe-area-inset-bottom)));
   }
 }
 

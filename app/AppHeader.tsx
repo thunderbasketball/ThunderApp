@@ -8,7 +8,7 @@ import { currentContexts } from "@/lib/contexts-server";
 import { db } from "@/lib/db";
 import { myEventCount } from "@/lib/events";
 import { myPracticesToday } from "@/lib/practice-attendance";
-import { localParts, zonedTime } from "@/lib/time";
+import { localParts, TZ, zonedTime } from "@/lib/time";
 import { syncIfStale } from "@/lib/teamsnap/scheduler";
 import { stopActing } from "./act-as/actions";
 import AnnouncementPopup from "./AnnouncementPopup";
@@ -192,7 +192,7 @@ export default async function AppHeader({ user, tab, context }: { user: SessionU
         <nav
           id="bottom-tabs"
           aria-label="Director"
-          className="fixed inset-x-0 bottom-0 z-20 border-t border-zinc-950/10 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl sm:hidden dark:border-white/10 dark:bg-zinc-950/95"
+          className="fixed inset-x-0 bottom-0 z-20 border-t border-zinc-950/10 bg-white/95 backdrop-blur-xl sm:hidden dark:border-white/10 dark:bg-zinc-950/95"
         >
           <div className="grid grid-cols-6">
             {tabs.map((t) => {
@@ -214,6 +214,11 @@ export default async function AppHeader({ user, tab, context }: { user: SessionU
                 </Link>
               );
             })}
+          </div>
+          {/* A strip under the tabs for the host's "Powered by" badge (bottom right), so it never covers a tab.
+            Also clears the iPhone home bar. Today's date fills the free left side. */}
+          <div className="flex h-[max(3.75rem,env(safe-area-inset-bottom))] items-center px-4 text-xs font-medium text-zinc-500 dark:text-zinc-400">
+            {new Date().toLocaleDateString("en-US", { timeZone: TZ, weekday: "short", month: "short", day: "numeric" })}
           </div>
         </nav>
       )}
