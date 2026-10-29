@@ -9,6 +9,7 @@ Secrets live only in `.env.local` (never committed, never pasted into chat). Two
 @AGENTS.md
 
 ## Commands
+- Phone app (iPhone + Android): Expo in `mobile/` (see `mobile/README.md`), its own package.json, lint and tsc; the website's tsc/lint/tests skip it. It calls `app/api/mobile/*`, which use the same `lib/` rules; the session token travels as `Authorization: Bearer` (`phoneUser()` in `lib/auth/server.ts`).
 - `npm run dev` — run locally at http://localhost:3000
 - `npm test` — run tests (Vitest; tests live next to code as `*.test.ts`). Takes ~90 s: only 2 files run at once because Supabase allows 60 connections and its pooler holds idle ones for a while. If tests fail with "too many clients", wait a minute and rerun.
 - `npx tsc --noEmit` and `npm run lint` — type check and lint

@@ -4,7 +4,7 @@ export default defineConfig({
   resolve: { alias: { "@": import.meta.dirname } },
   test: {
     include: ["**/*.test.ts"],
-    exclude: ["node_modules/**", ".next/**"],
+    exclude: ["node_modules/**", ".next/**", "mobile/**"],
     env: loadEnv("test", process.cwd(), ""),
     // Database tests talk to Supabase over the internet.
     testTimeout: 20_000,
