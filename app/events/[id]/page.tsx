@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { currentUser, devBypass } from "@/lib/auth/server";
 import { db } from "@/lib/db";
+import { gradesText } from "@/lib/event-names";
 import { getEvent } from "@/lib/events";
 import AppHeader from "../../AppHeader";
 import ChatLink from "../../ChatLink";
@@ -41,7 +42,7 @@ async function Event({ params }: { params: PageProps<"/events/[id]">["params"] }
           {event.location && ` · ${event.location}`}
         </p>
         <p className="mt-0.5 text-xs text-zinc-400">
-          {event.genders.join(" & ")} · grades {event.grades.join(", ")} · Check-in:{" "}
+          {event.genders.join(" & ")} · {gradesText(event.grades)} · Check-in:{" "}
           {event.staff.length ? event.staff.join(", ") : "Director only"}
         </p>
         {event.notes && <p className="mt-2 text-sm whitespace-pre-wrap">{event.notes}</p>}

@@ -81,7 +81,7 @@ describe("events", () => {
     if (!r.ok) return;
     const e = await getEvent(deps(), director, r.id);
     expect(e).toMatchObject({
-      name: "Tryouts – Girls Grades 4–5",
+      name: "Tryouts – Girls 4th–5th Grade",
       location: "Action Church",
       createdBy: "Earl X",
       staff: ["Hank X"],
@@ -113,7 +113,7 @@ describe("events", () => {
     if (!r.ok) throw new Error(r.message);
     expect(await getEvent(deps(), other, r.id)).toBeNull();
     expect((await listEvents(deps(), other)).length).toBe(0);
-    expect((await listEvents(deps(), helper)).map((e) => e.name)).toEqual(["Tryouts – Girls Grades 4–5"]);
+    expect((await listEvents(deps(), helper)).map((e) => e.name)).toEqual(["Tryouts – Girls 4th–5th Grade"]);
     expect(await myEventCount(deps(), helper)).toBe(1);
 
     expect(await setStatus(deps(), other, { eventId: r.id, registrantId: "r1", status: "here" })).toEqual({
@@ -151,7 +151,7 @@ describe("events", () => {
     const r = await createEvent(deps(), director, { ...tryouts, kind: "open gym", gender: "Coed", grades: ["5", "4", "K"], staff: [] });
     if (!r.ok) throw new Error(r.message);
     const e = await getEvent(deps(), director, r.id);
-    expect(e).toMatchObject({ name: "Open Gym – Coed Grades K, 4–5", genders: ["Boys", "Girls"], total: 3 });
+    expect(e).toMatchObject({ name: "Open Gym – Coed K, 4th–5th Grade", genders: ["Boys", "Girls"], total: 3 });
   });
 
   it("event types: the Director adds and removes quick options", async () => {
@@ -169,10 +169,12 @@ describe("events", () => {
   });
 
   it("names: grades become ranges", () => {
-    expect(gradesText(["4"])).toBe("Grade 4");
-    expect(gradesText(["K", "1", "2", "3"])).toBe("Grades K–3");
-    expect(gradesText(["2", "4", "5", "6", "9"])).toBe("Grades 2, 4–6, 9");
-    expect(eventName("Open Run", "Coed", ["7", "8"])).toBe("Open Run – Coed Grades 7–8");
+    expect(gradesText(["4"])).toBe("4th Grade");
+    expect(gradesText(["K"])).toBe("Kindergarten");
+    expect(gradesText(["1", "2", "3", "11", "12"])).toBe("1st–3rd, 11th–12th Grade");
+    expect(gradesText(["K", "1", "2", "3"])).toBe("K–3rd Grade");
+    expect(gradesText(["2", "4", "5", "6", "9"])).toBe("2nd, 4th–6th, 9th Grade");
+    expect(eventName("Open Run", "Coed", ["7", "8"])).toBe("Open Run – Coed 7th–8th Grade");
   });
 
   it("update player list adds new registrations without touching check-ins; delete removes it", async () => {

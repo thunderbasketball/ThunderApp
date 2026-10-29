@@ -2,6 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { gradeLabel } from "@/lib/grades";
 import type { RosterCandidate } from "@/lib/rosters";
 import { Alert, CloseButton, Toast, dialogCls, useConfirm } from "../../client-ui";
 import { primaryBtn } from "../../ui";
@@ -80,7 +81,7 @@ export function AddPlayersButton({ teamId, candidates }: { teamId: string; candi
                       {c.firstName} {c.lastName}
                     </span>
                     <span className="block text-xs text-zinc-500">
-                      {c.gender} · grade {c.grade}
+                      {c.gender} · {gradeLabel(c.grade)}
                       {c.otherTeams.length > 0 && (
                         <span className="text-amber-700 dark:text-amber-400"> · on {c.otherTeams.join(", ")}</span>
                       )}

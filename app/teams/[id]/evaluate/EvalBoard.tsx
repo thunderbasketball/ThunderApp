@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { HEIGHTS, NOTES_MAX, POSITIONS, SPEEDS, type Fields } from "@/lib/evaluation-fields";
 import type { EvalCard } from "@/lib/evaluations";
+import { gradeLabel } from "@/lib/grades";
 import { TZ } from "@/lib/time";
 import { Toast } from "../../../client-ui";
 import { saveEvaluation } from "../../actions";
@@ -60,7 +61,7 @@ export default function EvalBoard({ teamId, teamName, cards }: { teamId: string;
       {!shown.length && <p className="text-sm text-zinc-500">No players here.</p>}
       {grades.map((g) => (
         <section key={g} className="mb-6">
-          <h2 className="mb-2 text-sm font-semibold text-zinc-500 uppercase">{g === "K" ? "Kindergarten" : `Grade ${g}`}</h2>
+          <h2 className="mb-2 text-sm font-semibold text-zinc-500 uppercase">{gradeLabel(g)}</h2>
           <div className="space-y-3">
             {shown
               .filter((c) => c.grade === g)
@@ -131,6 +132,7 @@ function Card({
           <h3 className="truncate font-medium">
             {card.firstName} <span className="font-semibold">{card.lastName}</span>
           </h3>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">{gradeLabel(card.grade)}</p>
           <div className="mt-1 flex flex-wrap gap-1 text-xs">
             {card.rosteredOn.map((t) => (
               <span key={t} className="rounded-full bg-emerald-600 px-2 py-0.5 font-medium text-white">

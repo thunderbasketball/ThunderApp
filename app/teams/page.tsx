@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { currentUser, devBypass } from "@/lib/auth/server";
 import { db } from "@/lib/db";
+import { gradesText } from "@/lib/event-names";
 import { listTeams, type TeamListItem } from "@/lib/teams";
 import AppHeader from "../AppHeader";
 import { Chip, GroupCard, PageTitle, Stats } from "../ui";
@@ -17,8 +18,6 @@ export default function TeamsPage() {
     </Suspense>
   );
 }
-
-const gradesLabel = (g: string[]) => (g.length === 1 ? (g[0] === "K" ? "Kindergarten" : `Grade ${g[0]}`) : `Grades ${g.join(", ")}`);
 
 async function Teams() {
   const user = await currentUser();
@@ -80,7 +79,7 @@ async function Teams() {
                         <Chip tone={t.level === "COMP" ? "orange" : "zinc"}>{t.level}</Chip>
                       </div>
                       <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">
-                        {gradesLabel(t.grades)}
+                        {gradesText(t.grades)}
                         {t.practiceLocations.length > 0 && ` · ${t.practiceLocations.join(", ")}`}
                       </p>
                     </div>

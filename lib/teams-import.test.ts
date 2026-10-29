@@ -31,7 +31,7 @@ describe("parseTeamsTab", () => {
   it("warns when the name and grade disagree, and when there's no head coach", () => {
     const r = parseTeamsTab(tab(["7th", "", "Girls", "8G Black", "COMP", "3554447"], ["K", "", "Boys", "KB None", "REC", ""]));
     expect(r.warnings.map((w) => w.message)).toEqual([
-      "Name says 8G but the row says grade 7 Girls. Imported as grade 7.",
+      "Name says 8G but the row says 7th Grade Girls. Imported as 7th Grade.",
       "No head coach (CoachID).",
     ]);
     expect(r.teams.map((t) => t.grades)).toEqual([["7"], ["K"]]);
@@ -64,7 +64,9 @@ describe("importTeams", () => {
 
   beforeEach(async () => {
     await db.reset();
-    await db.pool.query("insert into users (coach_id, first_name, last_name, cell, thunder_director) values ('9913694', 'Earl', 'Epps', '4239913694', true)");
+    await db.pool.query(
+      "insert into users (coach_id, first_name, last_name, cell, thunder_director) values ('9913694', 'Earl', 'Epps', '4239913694', true)",
+    );
     // Parent 1 Pat Test, cell 4235550000 -> CoachID 5550000.
     const csv = parseRegistrations([HEADER, row({ rid: "1" })].join("\n"), { schoolYear: 2026 });
     await importRegistrations(db.pool, csv, "Earl Epps", now);
@@ -75,7 +77,8 @@ describe("importTeams", () => {
     ["2nd", "", "Boys", "2B Test", "COMP", "5550000"],
   );
   const staff = async () =>
-    (await db.pool.query("select t.name, s.coach_id, s.role from team_staff s join teams t on t.id = s.team_id order by t.name, s.role")).rows;
+    (await db.pool.query("select t.name, s.coach_id, s.role from team_staff s join teams t on t.id = s.team_id order by t.name, s.role"))
+      .rows;
 
   it("creates teams, matches users, creates logins from registration, lists the unmatched", async () => {
     const out = await importTeams(db.pool, parseTeamsTab(sheet), opts);

@@ -3,6 +3,8 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { currentUser, devBypass } from "@/lib/auth/server";
 import { db } from "@/lib/db";
+import { gradesText } from "@/lib/event-names";
+import { gradeLabel } from "@/lib/grades";
 import { formatCell } from "@/lib/phone";
 import { currentContexts } from "@/lib/contexts-server";
 import { upcomingForTeam } from "@/lib/practice/schedule";
@@ -74,7 +76,7 @@ async function Team({ params }: { params: PageProps<"/teams/[id]">["params"] }) 
                 <Chip tone={team.level === "COMP" ? "orange" : "zinc"}>{team.level}</Chip>
               </div>
               <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                {team.gender} · {team.grades.length === 1 ? "Grade" : "Grades"} {team.grades.join(", ")}
+                {team.gender} · {gradesText(team.grades)}
               </p>
               {team.practiceLocations.length > 0 && (
                 <p className="text-sm text-zinc-500 dark:text-zinc-400">Practices: {team.practiceLocations.join(", ")}</p>
@@ -172,7 +174,7 @@ async function Team({ params }: { params: PageProps<"/teams/[id]">["params"] }) 
                     {p.firstName} <span className="font-semibold">{p.lastName}</span>
                   </span>
                   <span className="block text-xs text-zinc-400">
-                    Grade {p.grade} · Rostered by {p.rosteredBy}
+                    {gradeLabel(p.grade)} · Rostered by {p.rosteredBy}
                     {!p.registered && <span className="text-amber-700 dark:text-amber-400"> · no longer in registrations</span>}
                   </span>
                 </span>

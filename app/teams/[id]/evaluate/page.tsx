@@ -5,6 +5,7 @@ import { currentUser, devBypass } from "@/lib/auth/server";
 import { currentContexts } from "@/lib/contexts-server";
 import { db } from "@/lib/db";
 import { listEvaluations } from "@/lib/evaluations";
+import { gradesText } from "@/lib/event-names";
 import { getTeam } from "@/lib/teams";
 import AppHeader from "../../../AppHeader";
 import { PageTitle } from "../../../ui";
@@ -39,7 +40,7 @@ async function Evaluate({ params }: { params: PageProps<"/teams/[id]/evaluate">[
         </Link>
         <PageTitle
           title="Evaluations"
-          subtitle={`${team.gender} in grade ${team.grades.join(", ")} and one grade below. Only ${team.name}'s coaches and the Director see these ratings.`}
+          subtitle={`${team.gender} in ${gradesText(team.grades)} and one grade below. Only ${team.name}'s coaches and the Director see these ratings.`}
         />
         <EvalBoard teamId={team.id} teamName={team.name} cards={cards} />
       </main>

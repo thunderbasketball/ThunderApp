@@ -3,6 +3,7 @@
 import type { Pool, PoolClient } from "pg";
 import { GRADES, gradeSort } from "./team-names";
 import { withTx } from "./sql";
+import { gradeLabel } from "./grades";
 
 const ROLES = { CoachID: "HeadCoach", AsstID: "AsstCoach", ManagerID: "Manager", ParentID: "TeamParent" } as const;
 type Role = (typeof ROLES)[keyof typeof ROLES];
@@ -50,7 +51,9 @@ export function parseTeamsTab(rows: string[][]): { teams: SheetTeam[]; errors: T
 
     const staff: SheetTeam["staff"] = [];
     for (const [c, role] of Object.entries(ROLES)) {
-      for (const id of get(c).split(/[\s,;/]+/).filter(Boolean)) {
+      for (const id of get(c)
+        .split(/[\s,;/]+/)
+        .filter(Boolean)) {
         if (!/^\d{7}$/.test(id)) warnings.push({ row, team: name, message: `${c} "${id}" isn't a 7-digit CoachID; skipped.` });
         else if (!staff.some((s) => s.coachId === id && s.role === role)) staff.push({ role, coachId: id });
       }
@@ -59,7 +62,11 @@ export function parseTeamsTab(rows: string[][]): { teams: SheetTeam[]; errors: T
 
     const prefix = name.match(/^(K|\d{1,2})([BG])\b/i);
     if (prefix && (prefix[1].toUpperCase() !== grade || prefix[2].toUpperCase() !== gender[0]))
-      warnings.push({ row, team: name, message: `Name says ${prefix[1]}${prefix[2].toUpperCase()} but the row says grade ${grade} ${gender}. Imported as grade ${grade}.` });
+      warnings.push({
+        row,
+        team: name,
+        message: `Name says ${prefix[1]}${prefix[2].toUpperCase()} but the row says ${gradeLabel(grade)} ${gender}. Imported as ${gradeLabel(grade)}.`,
+      });
 
     teams.push({
       row,
@@ -68,7 +75,10 @@ export function parseTeamsTab(rows: string[][]): { teams: SheetTeam[]; errors: T
       grades: [grade],
       level,
       staff,
-      practiceLocations: get("Practice Locations").split(",").map((s) => s.trim()).filter(Boolean),
+      practiceLocations: get("Practice Locations")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean),
     });
   });
   return { teams, errors, warnings };
@@ -143,7 +153,10 @@ async function findOrCreateUser(
   const u = await q.query<{ who: string }>("select first_name || ' ' || last_name as who from users where coach_id = $1", [coachId]);
   if (u.rows[0]) {
     if (isCoach)
-      await q.query("update users set thunder_coach = true, thunder_request = false, updated_at = $2 where coach_id = $1 and not thunder_coach", [coachId, now]);
+      await q.query(
+        "update users set thunder_coach = true, thunder_request = false, updated_at = $2 where coach_id = $1 and not thunder_coach",
+        [coachId, now],
+      );
     return { status: "user", who: u.rows[0].who };
   }
   const p = await q.query<{ first: string; last: string; cell: string; email: string | null }>(
