@@ -9,11 +9,30 @@ import { postMessage } from "../actions";
 const REFRESH_SECONDS = 5;
 
 const stamp = (d: Date | string) =>
-  new Date(d).toLocaleString("en-US", { timeZone: TZ, weekday: "short", hour: "numeric", minute: "2-digit" });
+  new Date(d).toLocaleString("en-US", {
+    timeZone: TZ,
+    weekday: "short",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 
 // Messages oldest to newest, newest at the bottom; checks for new ones every few seconds while open.
-export default function ChatThread({ chatKey, me, messages }: { chatKey: string; me: string; messages: ChatMessage[] }) {
+// `reload` fetches new messages (the page refreshes itself by default); `popup` lays it out for a pop-up.
+export default function ChatThread({
+  chatKey,
+  me,
+  messages,
+  reload,
+  popup = false,
+}: {
+  chatKey: string;
+  me: string;
+  messages: ChatMessage[];
+  reload?: () => void;
+  popup?: boolean;
+}) {
   const router = useRouter();
+  const refresh = reload ?? router.refresh;
   const [, startRefresh] = useTransition();
   const [sending, startSend] = useTransition();
   const [text, setText] = useState("");
@@ -23,10 +42,10 @@ export default function ChatThread({ chatKey, me, messages }: { chatKey: string;
 
   useEffect(() => {
     const t = setInterval(() => {
-      if (document.visibilityState === "visible") startRefresh(() => router.refresh());
+      if (document.visibilityState === "visible") startRefresh(() => refresh());
     }, REFRESH_SECONDS * 1000);
     return () => clearInterval(t);
-  }, [router]);
+  }, [refresh]);
 
   useEffect(() => {
     bottom.current?.scrollIntoView({ block: "end" });
@@ -40,13 +59,13 @@ export default function ChatThread({ chatKey, me, messages }: { chatKey: string;
       const r = await postMessage(chatKey, body);
       if (!r.ok) return setError(r.message);
       setText("");
-      router.refresh();
+      refresh();
     });
   }
 
   return (
-    <div className="flex flex-1 flex-col">
-      <div className="flex-1 space-y-2 py-4">
+    <div className={`flex flex-1 flex-col ${popup ? "min-h-0" : ""}`}>
+      <div className={`flex-1 space-y-2 py-4 ${popup ? "min-h-48 overflow-y-auto" : ""}`}>
         {!messages.length && <p className="py-8 text-center text-sm text-zinc-500">No messages yet. Say hello.</p>}
         {messages.map((m, i) => {
           const mine = m.senderId === me;
@@ -70,7 +89,11 @@ export default function ChatThread({ chatKey, me, messages }: { chatKey: string;
         <div ref={bottom} />
       </div>
       <form
-        className="chat-composer sticky bottom-0 -mx-4 border-t border-zinc-950/5 bg-white/95 px-4 py-3 backdrop-blur dark:border-white/10 dark:bg-zinc-950/95"
+        className={
+          popup
+            ? "border-t border-zinc-950/5 pt-3 dark:border-white/10"
+            : "chat-composer sticky bottom-0 -mx-4 border-t border-zinc-950/5 bg-white/95 px-4 py-3 backdrop-blur dark:border-white/10 dark:bg-zinc-950/95"
+        }
         onSubmit={(e) => {
           e.preventDefault();
           send();

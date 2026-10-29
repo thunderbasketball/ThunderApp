@@ -221,13 +221,14 @@ Built in steps: (1) announcements, (2) chats, (3) phone notifications (needs hos
 
 ### Notify bells (Director)
 An orange bell opens a short pop-up (title + message) already addressed to that spot's group, shows how many it reaches (and who), and sends after a warning confirm. Same announcement rules as above.
+- **Header bell (Directors):** pops up a notify to all team staff (every Head, Assistant, Manager and Team Parent), with a **My announcements** link to their inbox. Coaches' bell opens their inbox.
 - **Teams page:** "Notify everyone"; each team card notifies that team's staff.
 - **Practice schedule:** each day that has practices booked notifies the staff of every team practicing that day.
 - **Coaches page** (sections: Volunteers, Head, Assistants, Managers, Team Parents, each with a count): each section notifies its group. Current role sections list everyone holding that role on a team, with their teams.
 - **Volunteers** who have an app login (matched by cell) get it in the app; those without one are emailed right away (once per address). The Sent list shows "also emailed N without an app login".
 
 ### Chat (built)
-A chat bubble in the header (everyone with a role) shows unread chat messages and opens **Chat**: the person's chats, newest activity first, with the last message and an unread count. **+ New chat** lists what they can start; opening one that already has messages goes to it.
+A chat bubble in the header (everyone with a role) shows unread chat messages. For coaches it opens **Chat**; for **Directors** it pops up their chat with all Head Coaches, with an **All chats** link to **Chat**. **Chat** is the person's chats, newest activity first, with the last message and an unread count. **+ New chat** lists what they can start; opening one that already has messages goes to it.
 
 | Chat | Members | Who can start it |
 |---|---|---|
@@ -238,8 +239,13 @@ A chat bubble in the header (everyone with a role) shows unread chat messages an
 | <team> · Coaches | that team's Head and Assistant Coaches + Directors | Directors, those coaches |
 | <coach> · Directors | one coach + the Directors (the coach sees it as "Directors") | that coach, Directors |
 | <event> · Event | the event's check-in people + Directors | from the event page (Directors, its check-in people) |
+| <coach> (private) | one Director + one coach | that Director, from the coach's contact card |
+| <team> · Staff | one Director + that team's staff (all roles) | that Director, from the team card |
+| All Head Coaches | one Director + every Head Coach | that Director, from the header bubble |
 
-**Chat buttons** (blue chat icon) open a chat straight from where you are: a **team card** → that team's coaches; a **user card** on Users (coaches only) and the **💬 Chat** button on a coach's contact card → that coach's chat with the Directors; an **event** page → the event chat (players and parents have no logins, so it's for the people running it); a **practice** check-in page → that team's chat.
+The last three are started by one Director: only their members get unread counts and emails. Other Directors can still find, read and reply to them from **Chat**, but aren't alerted.
+
+**Chat buttons** (blue chat icon) open a chat straight from where you are: a **team card** → a pop-up chat with that team's staff; the **💬 Chat** button on a coach's contact card → a pop-up private chat with that coach; a **user card** on Users (coaches only) → that coach's chat with the Directors; an **event** page → the event chat (players and parents have no logins, so it's for the people running it); a **practice** check-in page → that team's chat.
 
 - A "coach" has the Coach role or is a Head or Assistant Coach on a team. Members follow current roles and team staff, so changes apply at once. **Directors can open every chat.** Team Parents and Managers are only in their team chats.
 - Messages (up to 2,000 characters) show oldest to newest with sender and time; the open chat checks for new messages every 5 seconds. Opening a chat marks it read (not while viewing as someone; posting is refused then too). Enter sends on a keyboard; phones use Send.

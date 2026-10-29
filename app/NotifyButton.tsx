@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useRef, useState, useTransition, type ReactNode } from "react";
+import Link from "next/link";
 import type { AudienceInput } from "@/lib/announcements";
 import { Alert, CloseButton, Toast, dialogCls, useConfirm } from "./client-ui";
 import { previewAudience, sendAnnouncement } from "./inbox/actions";
@@ -15,7 +16,22 @@ const reach = (p: NonNullable<Preview>) => {
 };
 
 // Director: a bell that sends an announcement to one group (a team, a practice day, a role, everyone…).
-export default function NotifyButton({ audience, to, size = "sm" }: { audience: AudienceInput; to: string; size?: "sm" | "md" }) {
+// `className` and `children` replace the round bell's look; `inbox` adds a link to the person's announcements.
+export default function NotifyButton({
+  audience,
+  to,
+  size = "sm",
+  className,
+  children,
+  inbox = false,
+}: {
+  audience: AudienceInput;
+  to: string;
+  size?: "sm" | "md";
+  className?: string;
+  children?: ReactNode;
+  inbox?: boolean;
+}) {
   const dialog = useRef<HTMLDialogElement>(null);
   const close = () => dialog.current?.close();
   const [title, setTitle] = useState("");
@@ -43,24 +59,29 @@ export default function NotifyButton({ audience, to, size = "sm" }: { audience: 
           if (r.ok) setPreview({ names: r.names, emailOnly: r.emailOnly });
           else setError(r.message);
         }}
-        className={`inline-flex shrink-0 items-center justify-center rounded-full text-thunder-orange ring-1 ring-thunder-orange/40 hover:bg-orange-50 dark:hover:bg-orange-500/10 ${
-          size === "md" ? "size-9" : "size-7"
-        }`}
+        className={
+          className ??
+          `inline-flex shrink-0 items-center justify-center rounded-full text-thunder-orange ring-1 ring-thunder-orange/40 hover:bg-orange-50 dark:hover:bg-orange-500/10 ${
+            size === "md" ? "size-9" : "size-7"
+          }`
+        }
       >
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={2}
-          aria-hidden
-          className={size === "md" ? "size-5" : "size-4"}
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0"
-          />
-        </svg>
+        {children ?? (
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            aria-hidden
+            className={size === "md" ? "size-5" : "size-4"}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0"
+            />
+          </svg>
+        )}
       </button>
       {done && <Toast key={done} message={done} />}
       {confirmDialog}
@@ -100,6 +121,11 @@ export default function NotifyButton({ audience, to, size = "sm" }: { audience: 
             </div>
             <CloseButton onClick={close} />
           </div>
+          {inbox && (
+            <Link href="/inbox" prefetch={false} onClick={close} className="block text-sm font-medium text-thunder-blue dark:text-blue-400">
+              My announcements →
+            </Link>
+          )}
           {preview && preview.names.length > 0 && (
             <details className="text-sm">
               <summary className="cursor-pointer text-zinc-500">Who</summary>

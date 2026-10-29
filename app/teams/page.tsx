@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { currentUser, devBypass } from "@/lib/auth/server";
+import { dmKey } from "@/lib/chat";
 import { db } from "@/lib/db";
 import { gradesText } from "@/lib/event-names";
 import { listTeams, type TeamListItem } from "@/lib/teams";
@@ -55,7 +56,11 @@ async function Teams() {
         <Stats
           items={[
             { label: "Teams", value: teams.length },
-            { label: "Comp", value: count("COMP"), tone: "text-thunder-orange" },
+            {
+              label: "Comp",
+              value: count("COMP"),
+              tone: "text-thunder-orange",
+            },
             { label: "Rec", value: count("REC") },
           ]}
         />
@@ -98,14 +103,16 @@ async function Teams() {
                           key={p.role}
                           person={p}
                           about={t.name}
-                          chatKey={p.role === "HeadCoach" || p.role === "AsstCoach" ? `coach-${p.coachId}` : undefined}
+                          chatKey={
+                            (p.role === "HeadCoach" || p.role === "AsstCoach") && p.coachId !== user.coachId
+                              ? dmKey(user.coachId, p.coachId)
+                              : undefined
+                          }
                         />
                       ))}
                       {!t.headCoach && <p className="text-sm text-amber-700 dark:text-amber-400">No head coach yet</p>}
                     </div>
-                    {t.staff.some((p) => p.role === "HeadCoach" || p.role === "AsstCoach") && (
-                      <ChatLink chatKey={`teamcoaches-${t.id}`} label={`Chat with ${t.name} coaches`} />
-                    )}
+                    {t.staff.length > 0 && <ChatLink chatKey={`staff-${user.coachId}-${t.id}`} label={`Chat with ${t.name} staff`} popup />}
                     {t.staff.length > 0 && <NotifyButton audience={{ teams: [t.id] }} to={t.name} />}
                   </div>
                 </li>

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { SessionUser } from "./auth/service";
-import { chatUnreadCount, getChat, listChats, markChatRead, newChatOptions, postMessage, sendUnreadChatEmails } from "./chat";
+import { chatUnreadCount, dmKey, getChat, listChats, markChatRead, newChatOptions, postMessage, sendUnreadChatEmails } from "./chat";
 import { createTestDb } from "./testing/db";
 
 const person = (coachId: string, firstName: string, isDirector = false): SessionUser => ({
@@ -107,6 +107,46 @@ describe("chat", () => {
     expect(await chatUnreadCount(deps(), dir)).toBe(1);
     await db.pool.query("delete from events where id = $1", [id]);
     expect(await getChat(deps(), dir, `event-${id}`)).toBeNull(); // event deleted: chat gone
+  });
+
+  it("chats a Director starts: only its people get alerts, other Directors can still read", async () => {
+    await db.pool.query(
+      "insert into users (coach_id, first_name, last_name, cell, thunder_director) values ('9900002', 'Dot', 'X', '4239900002', true)",
+    );
+    const dot = person("9900002", "Dot", true);
+    const dm = dmKey(dir.coachId, cal.coachId);
+    expect(dm).toBe(dmKey(cal.coachId, dir.coachId));
+    expect(await post(dir, dm, "Can you cover Tuesday?")).toMatchObject({ ok: true });
+    expect(await getChat(deps(), cal, dm)).toMatchObject({ title: "Dee X", members: ["Cal X", "Dee X"] });
+    expect(await getChat(deps(), dir, dm)).toMatchObject({ title: "Cal X" });
+    expect(await getChat(deps(), dot, dm)).toMatchObject({ title: "Cal X & Dee X" }); // another Director can read it
+    expect(await getChat(deps(), ace, dm)).toBeNull();
+    expect(await chatUnreadCount(deps(), cal)).toBe(1);
+    expect(await chatUnreadCount(deps(), dot)).toBe(0); // …but isn't alerted
+
+    // Team staff chat: Dee + everyone on team A (Head Coach and Team Parent).
+    expect(await post(dir, `staff-${dir.coachId}-${A}`, "Uniforms Friday")).toMatchObject({ ok: true });
+    expect(await getChat(deps(), pam, `staff-${dir.coachId}-${A}`)).toMatchObject({
+      title: "4G A · Staff + Dee X",
+      members: ["Cal X", "Dee X", "Pam X"],
+    });
+    expect(await getChat(deps(), ace, `staff-${dir.coachId}-${A}`)).toBeNull();
+    expect(await chatUnreadCount(deps(), pam)).toBe(1);
+    expect(await chatUnreadCount(deps(), dot)).toBe(0);
+
+    // All Head Coaches: Dee + Cal (Ace is an Assistant).
+    expect(await post(dir, `heads-${dir.coachId}`, "Meeting Monday")).toMatchObject({ ok: true });
+    expect(await getChat(deps(), dir, `heads-${dir.coachId}`)).toMatchObject({ title: "All Head Coaches", members: ["Cal X", "Dee X"] });
+    expect(await getChat(deps(), ace, `heads-${dir.coachId}`)).toBeNull();
+    expect(await chatUnreadCount(deps(), cal)).toBe(3); // private chat, team A staff chat, Head Coaches
+    expect(await chatUnreadCount(deps(), dot)).toBe(0);
+
+    // Only Directors start these, and only with coaches; the lower id comes first in a private chat key.
+    expect(await post(cal, `heads-${cal.coachId}`)).toMatchObject({ ok: false });
+    expect(await post(cal, `staff-${cal.coachId}-${A}`)).toMatchObject({ ok: false });
+    expect(await post(cal, dmKey(cal.coachId, ace.coachId))).toMatchObject({ ok: false });
+    expect(await post(dir, dmKey(dir.coachId, pam.coachId))).toMatchObject({ ok: false }); // a Team Parent isn't a coach
+    expect(await post(dir, "dm-9913694-5550001")).toMatchObject({ ok: false });
   });
 
   it("checks the message and the chat key", async () => {

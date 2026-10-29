@@ -6,6 +6,10 @@
 //   teamcoaches-<id> that team's Head and Assistant Coaches + Directors
 //   coach-<id>       one coach + the Directors
 //   event-<id>       the event's check-in people + Directors (started from the event)
+// Started by one person; Directors can still open them, but only members get unread counts and emails:
+//   dm-<a>-<b>       two people (lower id first), one of them a Director
+//   staff-<by>-<id>  Director <by> + that team's whole staff
+//   heads-<by>       Director <by> + every Head Coach
 // A "coach" has the Coach role or is a Head or Assistant Coach on a team. Directors can open every chat.
 import type { Pool } from "pg";
 import type { SessionUser } from "./auth/service";
@@ -20,7 +24,13 @@ export const EMAIL_AFTER_HOURS = 8;
 const HOUR = 3_600_000;
 const MAX_BODY = 2000;
 
-type Ctx = { coachId: string; director: boolean; coach: boolean; teams: { id: string; name: string; coach: boolean }[]; events: string[] };
+type Ctx = {
+  coachId: string;
+  director: boolean;
+  coach: boolean;
+  teams: { id: string; name: string; coach: boolean; head: boolean }[];
+  events: string[];
+};
 
 // Roles fresh from the database (for the viewer, or anyone when working out who gets an email).
 async function contextFor(q: Q, coachId: string): Promise<Ctx | null> {
@@ -29,8 +39,8 @@ async function contextFor(q: Q, coachId: string): Promise<Ctx | null> {
     [coachId],
   );
   if (!u.rows[0]) return null;
-  const t = await q.query<{ id: string; name: string; coach: boolean }>(
-    `select t.id::text, t.name, bool_or(s.role in ('HeadCoach', 'AsstCoach')) as coach
+  const t = await q.query<{ id: string; name: string; coach: boolean; head: boolean }>(
+    `select t.id::text, t.name, bool_or(s.role in ('HeadCoach', 'AsstCoach')) as coach, bool_or(s.role = 'HeadCoach') as head
      from team_staff s join teams t on t.id = s.team_id where s.coach_id = $1 group by t.id order by t.grade_sort, lower(t.name)`,
     [coachId],
   );
@@ -45,7 +55,15 @@ async function contextFor(q: Q, coachId: string): Promise<Ctx | null> {
 }
 
 type Key =
-  { kind: "directors" | "everyone" | "coaches" } | { kind: "team" | "teamcoaches" | "event"; id: string } | { kind: "coach"; id: string };
+  | { kind: "directors" | "everyone" | "coaches" }
+  | { kind: "team" | "teamcoaches" | "event"; id: string }
+  | { kind: "coach"; id: string }
+  | { kind: "dm"; a: string; b: string }
+  | { kind: "staff"; by: string; id: string }
+  | { kind: "heads"; by: string };
+
+// The private chat between two people (the same key whoever opens it).
+export const dmKey = (x: string, y: string) => (x < y ? `dm-${x}-${y}` : `dm-${y}-${x}`);
 
 export function parseKey(key: unknown): Key | null {
   if (typeof key !== "string") return null;
@@ -53,7 +71,13 @@ export function parseKey(key: unknown): Key | null {
   const m = key.match(/^(team|teamcoaches|event)-(\d{1,18})$/);
   if (m) return { kind: m[1] as "team" | "teamcoaches" | "event", id: m[2] };
   const c = key.match(/^coach-(\d{7})$/);
-  return c ? { kind: "coach", id: c[1] } : null;
+  if (c) return { kind: "coach", id: c[1] };
+  const d = key.match(/^dm-(\d{7})-(\d{7})$/);
+  if (d) return d[1] < d[2] ? { kind: "dm", a: d[1], b: d[2] } : null;
+  const s = key.match(/^staff-(\d{7})-(\d{1,18})$/);
+  if (s) return { kind: "staff", by: s[1], id: s[2] };
+  const h = key.match(/^heads-(\d{7})$/);
+  return h ? { kind: "heads", by: h[1] } : null;
 }
 
 // member: in the chat (unread counts, emails). seen: can read and post (members, plus Directors everywhere).
@@ -74,12 +98,33 @@ function access(ctx: Ctx, key: Key): { member: boolean; seen: boolean } {
         return ctx.director || (ctx.coach && key.id === ctx.coachId);
       case "event":
         return ctx.director || ctx.events.includes(key.id);
+      case "dm":
+        return key.a === ctx.coachId || key.b === ctx.coachId;
+      case "staff":
+        return key.by === ctx.coachId || ctx.teams.some((t) => t.id === key.id);
+      case "heads":
+        return key.by === ctx.coachId || ctx.teams.some((t) => t.head);
     }
   })();
   return { member, seen: member || ctx.director };
 }
 
-const keyText = (k: Key) => ("id" in k ? `${k.kind}-${k.id}` : k.kind);
+function keyText(k: Key): string {
+  switch (k.kind) {
+    case "dm":
+      return `dm-${k.a}-${k.b}`;
+    case "staff":
+      return `staff-${k.by}-${k.id}`;
+    case "heads":
+      return `heads-${k.by}`;
+    default:
+      return "id" in k ? `${k.kind}-${k.id}` : k.kind;
+  }
+}
+
+const nameOf = async (q: Q, coachId: string) =>
+  (await q.query<{ name: string }>("select first_name || ' ' || last_name as name from users where coach_id = $1", [coachId])).rows[0]
+    ?.name ?? null;
 
 // The chat's name as this person sees it, or null when the team or coach no longer exists.
 async function titleOf(q: Q, ctx: Ctx, k: Key): Promise<string | null> {
@@ -104,6 +149,44 @@ async function titleOf(q: Q, ctx: Ctx, k: Key): Promise<string | null> {
       const u = await q.query<{ name: string }>("select first_name || ' ' || last_name as name from users where coach_id = $1", [k.id]);
       return u.rows[0] ? `${u.rows[0].name} · Directors` : null;
     }
+    case "dm": {
+      const [a, b] = await Promise.all([nameOf(q, k.a), nameOf(q, k.b)]);
+      if (!a || !b) return null;
+      if (k.a === ctx.coachId) return b;
+      if (k.b === ctx.coachId) return a;
+      return `${a} & ${b}`;
+    }
+    case "staff": {
+      const t = await q.query<{ name: string }>("select name from teams where id = $1", [k.id]);
+      const by = await nameOf(q, k.by);
+      if (!t.rows[0] || !by) return null;
+      return k.by === ctx.coachId ? `${t.rows[0].name} · Staff` : `${t.rows[0].name} · Staff + ${by}`;
+    }
+    case "heads": {
+      const by = await nameOf(q, k.by);
+      if (!by) return null;
+      return k.by === ctx.coachId ? "All Head Coaches" : `Head Coaches + ${by}`;
+    }
+  }
+}
+
+// Chats started by one person must have been started by a Director (with a real coach, for a private chat).
+async function startable(q: Q, k: Key): Promise<boolean> {
+  const isDirector = async (id: string) =>
+    !!(await q.query("select 1 from users where coach_id = $1 and active and thunder_director", [id])).rows[0];
+  switch (k.kind) {
+    case "dm": {
+      const r = await q.query<{ director: boolean }>(
+        `select u.thunder_director as director from users u where u.coach_id in ($1, $2) and u.active and (u.thunder_director or ${IS_COACH})`,
+        [k.a, k.b],
+      );
+      return r.rows.length === 2 && r.rows.some((x) => x.director);
+    }
+    case "staff":
+    case "heads":
+      return isDirector(k.by);
+    default:
+      return true;
   }
 }
 
@@ -120,6 +203,7 @@ export async function newChatOptions(deps: Deps, viewer: SessionUser): Promise<C
     out.push({ key: "directors", title: "Directors", group: "Groups" });
     out.push({ key: "everyone", title: "Directors & all coaches", group: "Groups" });
     out.push({ key: "coaches", title: "Coaches (coaches' own chat)", group: "Groups" });
+    out.push({ key: `heads-${ctx.coachId}`, title: "All Head Coaches (you + them)", group: "Groups" });
     const coaches = await deps.pool.query<{ id: string; name: string }>(
       `select u.coach_id as id, u.first_name || ' ' || u.last_name as name from users u
        where u.active and u.coach_id <> $1 and (u.thunder_coach or exists (select 1 from team_staff s where s.coach_id = u.coach_id and s.role in ('HeadCoach', 'AsstCoach')))
@@ -209,7 +293,7 @@ export async function chatUnreadCount(deps: Deps, viewer: SessionUser): Promise<
 export type ChatMessage = { id: string; senderId: string; sender: string; body: string; at: Date };
 export type ChatThread = { key: string; title: string; members: string[]; messages: ChatMessage[] };
 
-const MEMBERS: Record<Key["kind"], string> = {
+const MEMBERS: Record<Exclude<Key["kind"], "dm" | "staff" | "heads">, string> = {
   directors: "u.thunder_director",
   everyone: "u.thunder_director or {coach}",
   coaches: "{coach}",
@@ -222,11 +306,24 @@ const MEMBERS: Record<Key["kind"], string> = {
 const IS_COACH =
   "(u.thunder_coach or exists (select 1 from team_staff s where s.coach_id = u.coach_id and s.role in ('HeadCoach', 'AsstCoach')))";
 
+function membersWhere(k: Key): [string, string[]] {
+  switch (k.kind) {
+    case "dm":
+      return ["u.coach_id in ($1, $2)", [k.a, k.b]];
+    case "staff":
+      return ["u.coach_id = $1 or exists (select 1 from team_staff s where s.coach_id = u.coach_id and s.team_id = $2)", [k.by, k.id]];
+    case "heads":
+      return ["u.coach_id = $1 or exists (select 1 from team_staff s where s.coach_id = u.coach_id and s.role = 'HeadCoach')", [k.by]];
+    default:
+      return [MEMBERS[k.kind].replace("{coach}", IS_COACH), "id" in k ? [k.id] : []];
+  }
+}
+
 async function memberNames(q: Q, k: Key): Promise<string[]> {
-  const where = MEMBERS[k.kind].replace("{coach}", IS_COACH);
+  const [where, params] = membersWhere(k);
   const r = await q.query<{ name: string }>(
     `select u.first_name || ' ' || u.last_name as name from users u where u.active and (${where}) order by lower(u.last_name), lower(u.first_name)`,
-    "id" in k ? [k.id] : [],
+    params,
   );
   return r.rows.map((x) => x.name);
 }
@@ -240,6 +337,7 @@ export async function getChat(deps: Deps, viewer: SessionUser, key: string): Pro
     const c = await deps.pool.query(`select 1 from users u where u.coach_id = $1 and ${IS_COACH}`, [k.id]);
     if (!c.rows[0]) return null;
   }
+  if (!(await startable(deps.pool, k))) return null;
   const title = await titleOf(deps.pool, ctx, k);
   if (!title) return null;
   const m = await deps.pool.query<ChatMessage>(
@@ -261,6 +359,7 @@ export async function postMessage(deps: Deps, viewer: SessionUser, key: unknown,
     const c = await deps.pool.query(`select 1 from users u where u.coach_id = $1 and u.active and ${IS_COACH}`, [k.id]);
     if (!c.rows[0]) return { ok: false, message: "That person isn't an active coach." };
   }
+  if (!(await startable(deps.pool, k))) return { ok: false, message: "You can't post in this chat." };
   const now = deps.now();
   return withTx(deps.pool, async (q) => {
     const r = await q.query<{ id: string }>(

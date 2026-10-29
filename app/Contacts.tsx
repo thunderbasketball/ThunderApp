@@ -1,8 +1,8 @@
 "use client";
 
 import { useRef } from "react";
-import Link from "next/link";
 import type { Contact } from "@/lib/teams";
+import ChatPopup from "./ChatPopup";
 import { CloseButton, dialogCls } from "./client-ui";
 
 type Role = Contact["role"];
@@ -28,11 +28,15 @@ export function RoleDot({ role }: { role: Role }) {
   );
 }
 
-type Person = Pick<Contact, "role" | "email"> & { first: string | null; last: string | null; cell: string | null };
+type Person = Pick<Contact, "role" | "email"> & {
+  first: string | null;
+  last: string | null;
+  cell: string | null;
+};
 
 // A role circle and the person's name; tapping the name opens their contact card.
 // `about` is the line under their name on the card (team, or the player they registered).
-// `chatKey`: an in-app chat with this person (coaches with a login).
+// `chatKey`: an in-app chat with this person (coaches with a login), opened in a pop-up.
 export function ContactChip({ person, about, chatKey }: { person: Person; about: string; chatKey?: string }) {
   const cell = person.cell && /^\d{10}$/.test(person.cell) ? person.cell : null;
   const name = [person.first, person.last].filter(Boolean).join(" ") || "No name";
@@ -70,9 +74,9 @@ export function ContactChip({ person, about, chatKey }: { person: Person; about:
           </div>
           <div className="flex gap-2">
             {chatKey && (
-              <Link href={`/chat/${chatKey}`} className={action}>
+              <ChatPopup chatKey={chatKey} label={`Chat with ${name}`} className={action}>
                 💬 Chat
-              </Link>
+              </ChatPopup>
             )}
             {cell && (
               <>

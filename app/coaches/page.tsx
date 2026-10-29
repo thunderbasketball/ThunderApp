@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { currentUser, devBypass } from "@/lib/auth/server";
+import { dmKey } from "@/lib/chat";
 import { listCurrentStaff, listVolunteerCoaches } from "@/lib/coaches";
 import { gradeLabel } from "@/lib/grades";
 import type { Role } from "@/lib/teams";
@@ -75,8 +76,16 @@ async function Coaches({ searchParams }: { searchParams: PageProps<"/coaches">["
             <Stats
               items={[
                 { label: "Volunteers", value: all.length },
-                { label: "Head", value: heads, tone: "text-emerald-600 dark:text-emerald-400" },
-                { label: "Assistant", value: all.length - heads, tone: "text-amber-600 dark:text-amber-400" },
+                {
+                  label: "Head",
+                  value: heads,
+                  tone: "text-emerald-600 dark:text-emerald-400",
+                },
+                {
+                  label: "Assistant",
+                  value: all.length - heads,
+                  tone: "text-amber-600 dark:text-amber-400",
+                },
               ]}
             />
             {!all.length && <p className="text-zinc-500">No volunteers yet.</p>}
@@ -109,7 +118,11 @@ async function Coaches({ searchParams }: { searchParams: PageProps<"/coaches">["
                 <ContactChip
                   person={{ role: section.key as Role, ...p }}
                   about={p.teams.join(", ")}
-                  chatKey={section.key === "HeadCoach" || section.key === "AsstCoach" ? `coach-${p.coachId}` : undefined}
+                  chatKey={
+                    (section.key === "HeadCoach" || section.key === "AsstCoach") && p.coachId !== user.coachId
+                      ? dmKey(user.coachId, p.coachId)
+                      : undefined
+                  }
                 />
                 <span className="text-sm text-zinc-500 dark:text-zinc-400">{p.teams.join(", ")}</span>
               </li>
