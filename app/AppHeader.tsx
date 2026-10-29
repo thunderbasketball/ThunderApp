@@ -76,11 +76,6 @@ export default async function AppHeader({ user, tab, context }: { user: SessionU
             </span>
           </Link>
           <div className="flex min-w-0 items-center gap-3">
-            {user.isDirector && (
-              <Link href="/preview" className="hidden text-sm font-medium text-thunder-blue hover:underline md:block dark:text-blue-400">
-                Preview
-              </Link>
-            )}
             {myEvents > 0 && (
               <Link
                 href="/events"
