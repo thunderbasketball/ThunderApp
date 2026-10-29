@@ -2,6 +2,7 @@
 
 import { VIEW_ONLY, currentUser } from "@/lib/auth/server";
 import { db } from "@/lib/db";
+import * as evaluations from "@/lib/evaluations";
 import * as rosters from "@/lib/rosters";
 import * as teams from "@/lib/teams";
 import type { CreateTeamInput, CreateTeamResult, UpdateTeamInput } from "@/lib/teams";
@@ -45,4 +46,9 @@ export async function addPlayers(teamId: string, ids: string[]) {
 }
 export async function removePlayer(teamId: string, registrantId: string) {
   return guarded((u) => rosters.removePlayer(deps, u, String(teamId), String(registrantId)));
+}
+
+// changes: only the fields that changed (checked again in lib/evaluations).
+export async function saveEvaluation(teamId: string, registrantId: string, changes: Record<string, unknown>) {
+  return guarded((u) => evaluations.saveEvaluation(deps, u, String(teamId), String(registrantId), changes));
 }

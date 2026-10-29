@@ -19,8 +19,8 @@ Same features, same rules. This file is the source of truth for behavior.
 2. **Who wins when both sides change the same user?** Proposed: most recent change wins, by timestamp, field by field. *Needed before: Phase 2.*
 3. **Weekend slots.** *Decided:* there are no weekend slots today; weeks are counted Monday 00:00 to the next Monday (Eastern), so a weekend slot would count with the Mon–Fri before it. Revisit if weekend slots are added.
 4. **Director bookings.** *Decided:* the Director is exempt from team limits (the app warns when a team goes over).
-5. **Evaluation fields.** List the exact fields on an evaluation card (e.g. shooting, defense, notes) and their type (1–5 score, text). *Needed before: Phase 6.*
-6. **Registration eligibility.** Which TeamSnap columns give grade and gender, and how is "eligible for a team's grades" matched (grade only, or grade + gender)? *Needed before: Phase 6.*
+5. **Evaluation fields.** *Decided:* same as the Sheet's Evaluations tab: Position (Guard/Wing/Post), Height (Short/Average/Tall), Speed (Slow/Average/Fast), Score 1–5, Notes (up to 1000 characters), Interested (the Sheet's Pickup).
+6. **Registration eligibility.** *Decided:* TeamSnap gives gender and grade (see section 1 import). Evaluations: same gender, the team's grade(s) or one grade below.
 
 ---
 
@@ -155,8 +155,11 @@ Example: Team has Thu 6PM. Mon 6PM is within 72h → can add it (N=1). Once Mon 
 
 ## 5. Evaluations & rosters
 
-- Coaches (HeadCoach, AsstCoach, Director-as-coach) evaluate registered players eligible for their team's grades.
-- One card per player: name, grade, evaluation fields (see Open Question 5), and an **Interested** checkbox.
+- Coaches (HeadCoach, AsstCoach, Director-as-coach) evaluate registered players eligible for their team: **same gender, the team's grade(s) or one grade below** (built: Team page → Evaluate players).
+- One card per player per team: name, grade, evaluation fields (see Open Question 5), and an **Interested** toggle. Each tap saves at once (only the changed field, so two coaches don't undo each other); tapping a picked choice clears it; a card with everything blank is removed. Saved By + time shown.
+- Each team sees **only its own** ratings; the Director sees every team's. A card stays if the player leaves registrations.
+- Cards are grouped by grade (top grade first), then last name. Filters: All, Not rated, Interested; search by name.
+- Import the Sheet's Evaluations tab with `npm run import:evaluations` (safe to re-run; existing cards left alone).
 - Under each player's name and grade: pills showing which teams marked Interested and which team rostered them.
 - **Only the Director can roster**, from the Director view: one checkbox per eligible team. A player can be on only one team (checking a second team is refused until the first is unchecked).
 - Roster record: Player, Grade, Gender, Team, Rostered By, Date.

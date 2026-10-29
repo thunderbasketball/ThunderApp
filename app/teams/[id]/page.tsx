@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { formatCell } from "@/lib/phone";
 import { currentContexts } from "@/lib/contexts-server";
 import { upcomingForTeam } from "@/lib/practice/schedule";
+import { canEvaluate, evaluationCounts } from "@/lib/evaluations";
 import { listRoster, rosterCandidates } from "@/lib/rosters";
 import { TZ } from "@/lib/time";
 import { getTeam, personOptions, roleLabel } from "@/lib/teams";
@@ -39,10 +40,11 @@ async function Team({ params }: { params: PageProps<"/teams/[id]">["params"] }) 
   const canEditStaff = asDirector || team.myRoles.includes("HeadCoach");
   // Only the Director picks from the full user and volunteer lists; a head coach adds people by cell number.
   const options = asDirector ? await personOptions(deps, user) : null;
-  const [practices, roster, candidates] = await Promise.all([
+  const [practices, roster, candidates, evals] = await Promise.all([
     upcomingForTeam(deps, team.id),
     listRoster(deps, user, team.id),
     asDirector ? rosterCandidates(deps, user, team.id) : [],
+    canEvaluate(db, user, team.id).then((ok) => (ok ? evaluationCounts(deps, team.id) : null)),
   ]);
   const players = roster ?? [];
   const canBook = asDirector || team.myRoles.some((r) => r !== "TeamParent");
@@ -136,6 +138,22 @@ async function Team({ params }: { params: PageProps<"/teams/[id]">["params"] }) 
             ))}
           </ul>
         </section>
+        {evals && (
+          <section className={`${card} flex items-center justify-between gap-3 p-4`}>
+            <div className="min-w-0">
+              <h2 className="font-semibold">Evaluations</h2>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                {evals.evaluated} of {evals.eligible} rated · ★ {evals.interested} interested
+              </p>
+            </div>
+            <Link
+              href={`/teams/${team.id}/evaluate`}
+              className="shrink-0 rounded-full bg-thunder-blue px-3 py-1.5 text-sm font-semibold whitespace-nowrap text-white shadow-sm hover:bg-thunder-blue-dark"
+            >
+              Evaluate players
+            </Link>
+          </section>
+        )}
         <section className={`${card} overflow-hidden`}>
           <div className="flex items-center justify-between gap-3 px-4 pt-4 pb-3">
             <h2 className="font-semibold">Players ({players.length})</h2>
