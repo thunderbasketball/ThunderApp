@@ -51,3 +51,42 @@ summary::-webkit-details-marker {
 summary {
   list-style: none;
 }
+
+/* A team menu tab with something missing (Uniforms) flashes red until it's fixed. */
+@keyframes flash-red {
+  0%,
+  100% {
+    background-color: #dc2626;
+    color: #fff;
+  }
+  50% {
+    background-color: transparent;
+    color: #dc2626;
+  }
+}
+@keyframes flash-red-text {
+  0%,
+  100% {
+    color: #dc2626;
+  }
+  50% {
+    color: #fca5a5;
+  }
+}
+.flash-red {
+  animation: flash-red 1.2s ease-in-out infinite;
+}
+.flash-red-text {
+  animation: flash-red-text 1.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .flash-red {
+    animation: none;
+    background-color: #dc2626;
+    color: #fff;
+  }
+  .flash-red-text {
+    animation: none;
+    color: #dc2626;
+  }
+}

@@ -42,6 +42,7 @@ export type TeamListItem = {
   practiceLocations: string[];
   headCoach: { first: string; last: string; cell: string } | null;
   staff: Contact[]; // Head Coach, Assistant, Manager, Team Parent order
+  players: { registrantId: string; first: string; last: string; grade: string; rosteredBy: string }[]; // by last name
 };
 
 export type Contact = { coachId: string; role: Role; first: string; last: string; cell: string; email: string | null };
@@ -55,7 +56,11 @@ export async function listTeams(deps: Deps, viewer: SessionUser): Promise<TeamLi
     `select t.id::text, t.name, t.gender, t.grades, t.level, t.created_by as "createdBy", t.practice_locations as "practiceLocations",
             coalesce((select json_agg(json_build_object('coachId', u.coach_id, 'role', s.role, 'first', u.first_name, 'last', u.last_name,
                                                         'cell', u.cell, 'email', u.email) order by ${roleOrder})
-                      from team_staff s join users u on u.coach_id = s.coach_id where s.team_id = t.id), '[]') as staff
+                      from team_staff s join users u on u.coach_id = s.coach_id where s.team_id = t.id), '[]') as staff,
+            coalesce((select json_agg(json_build_object('registrantId', p.registrant_id, 'first', p.first_name, 'last', p.last_name,
+                                                        'grade', p.grade, 'rosteredBy', p.rostered_by)
+                                      order by lower(p.last_name), lower(p.first_name))
+                      from team_players p where p.team_id = t.id), '[]') as players
      from teams t
      order by t.level = 'COMP' desc, t.gender, t.grade_sort, lower(t.name)`,
   );
@@ -83,7 +88,6 @@ export type TeamDetail = Omit<TeamListItem, "headCoach" | "staff"> & {
   canEditTeam: boolean;
   canEditStaff: boolean;
 };
-
 
 // The Director, or anyone on this team's staff. Null if the viewer can't see the team.
 export async function getTeam(deps: Deps, viewer: SessionUser, id: string): Promise<TeamDetail | null> {
@@ -201,10 +205,10 @@ async function resolvePerson(
   }
 
   if (isCoach)
-    await q.query("update users set thunder_coach = true, thunder_request = false, updated_at = $2 where coach_id = $1 and not thunder_coach", [
-      found.coachId,
-      now,
-    ]);
+    await q.query(
+      "update users set thunder_coach = true, thunder_request = false, updated_at = $2 where coach_id = $1 and not thunder_coach",
+      [found.coachId, now],
+    );
   return found;
 }
 
@@ -223,7 +227,9 @@ async function createOrMatchUser(
   );
   const e = existing.rows[0];
   if (e && e.cell !== p.cell)
-    throw new UserError(`${p.first} ${p.last}'s cell ends in the same 7 digits as ${e.first_name} ${e.last_name}'s. Please contact support.`);
+    throw new UserError(
+      `${p.first} ${p.last}'s cell ends in the same 7 digits as ${e.first_name} ${e.last_name}'s. Please contact support.`,
+    );
   if (e && !e.active) throw new UserError(`${e.first_name} ${e.last_name} has a deactivated account.`);
   if (e) return { coachId, lastName: e.last_name, who: `${e.first_name} ${e.last_name}`, newLogin: false };
   await q.query(
@@ -320,14 +326,10 @@ export async function updateTeam(deps: Deps, viewer: SessionUser, id: string, in
     const f = cleanTeamFields(input);
     const locations = cleanLocations(input.practiceLocations);
     return withTx(deps.pool, async (q) => {
-      const r = await q.query("update teams set gender = $2, grades = $3, grade_sort = $4, level = $5, practice_locations = $6 where id = $1", [
-        id,
-        f.gender,
-        f.grades,
-        f.gradeSort,
-        f.level,
-        locations,
-      ]);
+      const r = await q.query(
+        "update teams set gender = $2, grades = $3, grade_sort = $4, level = $5, practice_locations = $6 where id = $1",
+        [id, f.gender, f.grades, f.gradeSort, f.level, locations],
+      );
       if (!r.rowCount) throw new UserError("That team no longer exists.");
       return { name: await rename(q, id) };
     });
@@ -341,7 +343,10 @@ async function lockTeamForStaff(q: PoolClient, viewer: SessionUser, teamId: stri
   if (!t.rows[0]) throw new UserError("That team no longer exists.");
   if (viewer.isDirector) return;
   // A head coach can manage their own team's other staff, but not the head coach spot.
-  const head = await q.query("select 1 from team_staff where team_id = $1 and role = 'HeadCoach' and coach_id = $2", [teamId, viewer.coachId]);
+  const head = await q.query("select 1 from team_staff where team_id = $1 and role = 'HeadCoach' and coach_id = $2", [
+    teamId,
+    viewer.coachId,
+  ]);
   if (!head.rows[0]) throw new UserError("Only the Director or this team's head coach can change staff.");
   if (role === "HeadCoach") throw new UserError("Only the Director can change the head coach.");
 }
@@ -349,7 +354,12 @@ async function lockTeamForStaff(q: PoolClient, viewer: SessionUser, teamId: stri
 export type AddStaffResult = Result<{ who: string; newLogin: boolean; name: string }>;
 
 // One person per role. Adding a head coach replaces the current one and renames the team.
-export async function addStaff(deps: Deps, viewer: SessionUser, teamId: string, input: { role: unknown; person: unknown }): Promise<AddStaffResult> {
+export async function addStaff(
+  deps: Deps,
+  viewer: SessionUser,
+  teamId: string,
+  input: { role: unknown; person: unknown },
+): Promise<AddStaffResult> {
   const role = (ROLES as readonly unknown[]).includes(input.role) ? (input.role as Role) : null;
   if (!role) return { ok: false, message: "Pick a role." };
   if (!/^\d{1,18}$/.test(teamId)) return { ok: false, message: "That team no longer exists." };

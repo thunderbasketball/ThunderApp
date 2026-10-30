@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { SessionUser } from "./auth/service";
-import { evaluationCounts, listEvaluations, saveEvaluation } from "./evaluations";
+import { evaluationCounts, listEvaluations, playerEvaluations, saveEvaluation } from "./evaluations";
 import { importEvaluations, parseEvaluationsTab } from "./evaluations-import";
 import { addPlayers } from "./rosters";
 import { createTestDb } from "./testing/db";
@@ -96,6 +96,19 @@ describe("evaluations", () => {
     });
     expect(await saveEvaluation(deps(), tm, A, "r1", { score: 1 })).toMatchObject({ ok: false });
     expect(await evaluationCounts(deps(), A)).toEqual({ eligible: 3, evaluated: 1, interested: 0 });
+  });
+
+  it("Players page: the Director sees one player's card for each team they can play for, their own team first", async () => {
+    const teams = async (id: string) => (await playerEvaluations(deps(), dir, id))?.map((x) => x.teamName);
+    expect(await teams("r2")).toEqual(["4G A", "4G B"]); // a 3rd grader can play up for the 4th grade teams
+    expect(await teams("r3")).toEqual([]); // two grades below: none
+    await saveEvaluation(deps(), dir, B, "r1", { score: 5 });
+    await addPlayers(deps(), dir, B, ["r1"]);
+    const r1 = await playerEvaluations(deps(), dir, "r1");
+    expect(r1?.map((x) => x.teamName)).toEqual(["4G B", "4G A"]); // rostered on B: B first
+    expect(r1?.[0].card).toMatchObject({ score: 5, updatedBy: "Dee X", rosteredOn: ["4G B"] });
+    expect(r1?.[1].card).toMatchObject({ score: null, updatedBy: null });
+    expect(await playerEvaluations(deps(), hc, "r1")).toBeNull(); // Directors only
   });
 
   it("checks every value on the server", async () => {

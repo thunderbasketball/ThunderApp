@@ -82,7 +82,8 @@ export default function EvalBoard({ teamId, teamName, cards }: { teamId: string;
   );
 }
 
-function Card({
+// One player's evaluation card (also shown in the Roster tab's Evaluate pop-up).
+export function Card({
   teamId,
   teamName,
   card,

@@ -6,6 +6,7 @@ import { dmKey } from "@/lib/chat";
 import { listCurrentStaff, listVolunteerCoaches } from "@/lib/coaches";
 import { gradeLabel } from "@/lib/grades";
 import type { Role } from "@/lib/teams";
+import { ViewAsButton } from "../ViewAsButton";
 import AppHeader from "../AppHeader";
 import { ContactChip, GroupTextButton } from "../Contacts";
 import NotifyButton from "../NotifyButton";
@@ -114,17 +115,25 @@ async function Coaches({ searchParams }: { searchParams: PageProps<"/coaches">["
         ) : people.length ? (
           <GroupCard title={section.title} count={people.length}>
             {people.map((p) => (
-              <li key={p.coachId} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 px-4 py-2.5">
-                <ContactChip
-                  person={{ role: section.key as Role, ...p }}
-                  about={p.teams.join(", ")}
-                  chatKey={
-                    (section.key === "HeadCoach" || section.key === "AsstCoach") && p.coachId !== user.coachId
-                      ? dmKey(user.coachId, p.coachId)
-                      : undefined
-                  }
-                />
-                <span className="text-sm text-zinc-500 dark:text-zinc-400">{p.teams.join(", ")}</span>
+              <li key={p.coachId} className="flex items-start gap-x-2 px-4 py-2.5">
+                <div className="flex flex-col items-start gap-1">
+                  <ContactChip
+                    person={{ role: section.key as Role, ...p }}
+                    about={p.teams.join(", ")}
+                    chatKey={
+                      (section.key === "HeadCoach" || section.key === "AsstCoach") && p.coachId !== user.coachId
+                        ? dmKey(user.coachId, p.coachId)
+                        : undefined
+                    }
+                  />
+                  {/* Under the role circle, which sits 2px in from the chip's edge. */}
+                  {p.coachId !== user.coachId && (
+                    <span className="pl-px">
+                      <ViewAsButton coachId={p.coachId} name={`${p.first} ${p.last}`} />
+                    </span>
+                  )}
+                </div>
+                <span className="flex-1 pt-1 text-sm text-zinc-500 dark:text-zinc-400">{p.teams.join(", ")}</span>
               </li>
             ))}
           </GroupCard>

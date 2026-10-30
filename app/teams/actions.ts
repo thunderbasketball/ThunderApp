@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import * as evaluations from "@/lib/evaluations";
 import * as rosters from "@/lib/rosters";
 import * as teams from "@/lib/teams";
+import * as uniforms from "@/lib/uniforms";
 import type { CreateTeamInput, CreateTeamResult, UpdateTeamInput } from "@/lib/teams";
 
 const deps = { pool: db, now: () => new Date() };
@@ -51,4 +52,9 @@ export async function removePlayer(teamId: string, registrantId: string) {
 // changes: only the fields that changed (checked again in lib/evaluations).
 export async function saveEvaluation(teamId: string, registrantId: string, changes: Record<string, unknown>) {
   return guarded((u) => evaluations.saveEvaluation(deps, u, String(teamId), String(registrantId), changes));
+}
+
+export async function saveUniform(teamId: string, registrantId: string, changes: { number?: string | null; size?: string | null }) {
+  const clean = changes && typeof changes === "object" ? changes : {};
+  return guarded((u) => uniforms.saveUniform(deps, u, String(teamId), String(registrantId), clean));
 }

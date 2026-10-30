@@ -3,7 +3,6 @@
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { UserListItem } from "@/lib/users";
-import { actAs } from "../act-as/actions";
 import { addUser, deleteUser, denyRequest, resetLogin, updateUser } from "./actions";
 import { Alert, CloseButton, Toast, dialogCls, useConfirm } from "../client-ui";
 import { fieldLabel, inputCls, primaryBtn } from "../ui";
@@ -176,24 +175,6 @@ export function EditUserButton({ user, isSelf, deleteBlocker }: { user: UserList
           </button>
 
           <div className="space-y-3 border-t border-zinc-100 pt-4 dark:border-white/5">
-            {!isSelf && user.active && (
-              <div>
-                <button
-                  type="button"
-                  disabled={busy}
-                  className="text-sm font-medium text-thunder-blue hover:underline dark:text-blue-400"
-                  onClick={() =>
-                    start(async () => {
-                      setError(null);
-                      const r = await actAs(user.coachId);
-                      if (r && !r.ok) setError(r.message);
-                    })
-                  }
-                >
-                  👁 View the app as {user.firstName} (view only)
-                </button>
-              </div>
-            )}
             {!isSelf && (
               <div>
                 <button

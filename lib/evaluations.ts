@@ -73,6 +73,35 @@ export async function listEvaluations(deps: Deps, viewer: SessionUser, teamId: s
   return r.rows;
 }
 
+export type TeamEvalCard = { teamId: string; teamName: string; card: EvalCard };
+
+// Director, Players page: one registered player's card for every team they can play for (same gender; the team's
+// grade or one above theirs) and any other team that already rated them. Their own team first, then Comp, by grade.
+export async function playerEvaluations(deps: Deps, viewer: SessionUser, registrantId: unknown): Promise<TeamEvalCard[] | null> {
+  if (!viewer.isDirector || !isRegistrant(registrantId)) return null;
+  const r = await deps.pool.query<EvalCard & { teamId: string; teamName: string }>(
+    `select t.id::text as "teamId", t.name as "teamName",
+            g.registrant_id as "registrantId", g.first_name as "firstName", g.last_name as "lastName", g.grade,
+            g.grade_sort as "gradeSort", true as registered,
+            e.position, e.height, e.speed, e.score, coalesce(e.notes, '') as notes, coalesce(e.interested, false) as interested,
+            e.updated_by as "updatedBy", e.updated_at as "updatedAt",
+            array(select t2.name from evaluations i join teams t2 on t2.id = i.team_id
+                  where i.registrant_id = g.registrant_id and i.interested order by t2.name) as "interestedTeams",
+            array(select t2.name from team_players tp join teams t2 on t2.id = tp.team_id
+                  where tp.registrant_id = g.registrant_id order by t2.name) as "rosteredOn"
+     from registrations g cross join teams t
+     left join evaluations e on e.team_id = t.id and e.registrant_id = g.registrant_id
+     where g.registrant_id = $1
+       and (e.team_id is not null
+            or (t.gender = g.gender
+                and exists (select 1 from unnest(t.grades) x where (case when x = 'K' then 0 else x::int end) in (g.grade_sort, g.grade_sort + 1))))
+     order by exists (select 1 from team_players tp where tp.team_id = t.id and tp.registrant_id = g.registrant_id) desc,
+              t.level = 'COMP' desc, t.grade_sort, lower(t.name)`,
+    [registrantId],
+  );
+  return r.rows.map(({ teamId, teamName, ...card }) => ({ teamId, teamName, card }));
+}
+
 // For the team page: how many players this team has rated and marked Interested.
 export async function evaluationCounts(deps: Deps, teamId: string) {
   const r = await deps.pool.query<{ eligible: number; evaluated: number; interested: number }>(

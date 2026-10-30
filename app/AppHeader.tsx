@@ -18,6 +18,7 @@ import { LogoutButton } from "./HomeActions";
 import { Avatar } from "./ui";
 
 type Tab = "teams" | "practice" | "events" | "users" | "players" | "coaches";
+export type TeamTab = "staff" | "roster" | "uniforms" | "practices";
 
 // Events the person runs check-in for (from yesterday on), plus their teams' practices today.
 async function checkInsFor(user: SessionUser): Promise<number> {
@@ -32,7 +33,19 @@ async function checkInsFor(user: SessionUser): Promise<number> {
 
 // Sticky top bar: logo, the user, one chip per role to switch between them, and the Director tabs.
 // `context` is the role this page is shown as ("director" or "team:<id>"); it highlights that chip.
-export default async function AppHeader({ user, tab, context }: { user: SessionUser; tab?: Tab; context?: string }) {
+// `teamTab`: on a team page seen as its staff, the Staff / Roster / Uniforms / Practices menu (top on a computer, bottom on
+// a phone). `alert` makes that tab flash red (Uniforms, while any player's number or size is missing).
+export default async function AppHeader({
+  user,
+  tab,
+  context,
+  teamTab,
+}: {
+  user: SessionUser;
+  tab?: Tab;
+  context?: string;
+  teamTab?: { teamId: string; tab: TeamTab; alert?: TeamTab[] };
+}) {
   const deps = { pool: db, now: () => new Date() };
   const [{ contexts }, unread, myEvents, popups, chatUnread] = await Promise.all([
     currentContexts(user),
@@ -44,7 +57,7 @@ export default async function AppHeader({ user, tab, context }: { user: SessionU
   ]);
   // Backup for the sheet timer: after this page is sent, refresh registrations if the last check is stale.
   after(syncIfStale);
-  const tabs: { key: Tab; href: string; label: string; icon: string }[] = [
+  const directorTabs: { key: string; href: string; label: string; icon: string }[] = [
     { key: "teams", href: "/teams", label: "Teams", icon: ICONS.teams },
     {
       key: "practice",
@@ -57,7 +70,17 @@ export default async function AppHeader({ user, tab, context }: { user: SessionU
     { key: "players", href: "/players", label: "Players", icon: ICONS.players },
     { key: "coaches", href: "/coaches", label: "Coaches", icon: ICONS.coaches },
   ];
-  const showTabs = user.isDirector && context === "director";
+  const tabs = teamTab
+    ? [
+        { key: "staff", href: `/teams/${teamTab.teamId}`, label: "Staff", icon: ICONS.teams },
+        { key: "roster", href: `/teams/${teamTab.teamId}?tab=roster`, label: "Roster", icon: ICONS.roster },
+        { key: "uniforms", href: `/teams/${teamTab.teamId}?tab=uniforms`, label: "Uniforms", icon: ICONS.uniforms },
+        { key: "practices", href: `/teams/${teamTab.teamId}?tab=practices`, label: "Practices", icon: ICONS.practice },
+      ]
+    : directorTabs;
+  const activeTab: string | undefined = teamTab ? teamTab.tab : tab;
+  const alerting = (key: string) => !!teamTab?.alert?.includes(key as TeamTab);
+  const showTabs = !!teamTab || (user.isDirector && context === "director");
   return (
     <>
       <header className="sticky top-0 z-10 border-t-[3px] border-t-thunder-orange border-b border-zinc-950/5 bg-white/80 backdrop-blur-xl dark:border-white/10 dark:bg-zinc-950/80">
@@ -152,20 +175,23 @@ export default async function AppHeader({ user, tab, context }: { user: SessionU
 
         {/* Tablets and computers: tabs under the header. */}
         {showTabs && (
-          <nav aria-label="Director" className="mx-auto hidden max-w-3xl px-4 pb-3 sm:block">
+          <nav aria-label={teamTab ? "Team" : "Director"} className="mx-auto hidden max-w-3xl px-4 pb-3 sm:block">
             <div className="inline-flex rounded-full bg-zinc-100 p-1 dark:bg-zinc-900">
               {tabs.map((t) => (
                 <Link
                   key={t.key}
                   href={t.href}
-                  aria-current={tab === t.key ? "page" : undefined}
+                  aria-current={activeTab === t.key ? "page" : undefined}
                   className={`rounded-full px-5 py-1.5 text-center text-sm font-medium whitespace-nowrap transition-colors ${
-                    tab === t.key
-                      ? "bg-thunder-blue text-white shadow-sm"
-                      : "text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white"
+                    alerting(t.key)
+                      ? "flash-red"
+                      : activeTab === t.key
+                        ? "bg-thunder-blue text-white shadow-sm"
+                        : "text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white"
                   }`}
                 >
                   {t.label}
+                  {alerting(t.key) && <span className="sr-only"> (info missing)</span>}
                 </Link>
               ))}
             </div>
@@ -179,19 +205,19 @@ export default async function AppHeader({ user, tab, context }: { user: SessionU
       {showTabs && (
         <nav
           id="bottom-tabs"
-          aria-label="Director"
+          aria-label={teamTab ? "Team" : "Director"}
           className="fixed inset-x-0 bottom-0 z-20 border-t border-zinc-950/10 bg-white/95 backdrop-blur-xl sm:hidden dark:border-white/10 dark:bg-zinc-950/95"
         >
-          <div className="grid grid-cols-6">
+          <div className={`grid ${tabs.length === 4 ? "grid-cols-4" : "grid-cols-6"}`}>
             {tabs.map((t) => {
-              const on = tab === t.key;
+              const on = activeTab === t.key;
               return (
                 <Link
                   key={t.key}
                   href={t.href}
                   aria-current={on ? "page" : undefined}
                   className={`relative flex flex-col items-center gap-0.5 pt-2 pb-1.5 text-[11px] font-medium ${
-                    on ? "text-thunder-blue dark:text-blue-400" : "text-zinc-500 dark:text-zinc-400"
+                    alerting(t.key) ? "flash-red-text" : on ? "text-thunder-blue dark:text-blue-400" : "text-zinc-500 dark:text-zinc-400"
                   }`}
                 >
                   {on && <span className="absolute inset-x-3 top-0 h-0.5 rounded-full bg-thunder-blue" />}
@@ -199,6 +225,7 @@ export default async function AppHeader({ user, tab, context }: { user: SessionU
                     <path strokeLinecap="round" strokeLinejoin="round" d={t.icon} />
                   </svg>
                   {t.label}
+                  {alerting(t.key) && <span className="sr-only"> (info missing)</span>}
                 </Link>
               );
             })}
@@ -246,6 +273,9 @@ const ICONS = {
   bell: "M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0",
   teams:
     "M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197m0 0A5.995 5.995 0 0 0 12 12.75a5.995 5.995 0 0 0-5.058 2.772m0 0a3 3 0 0 0-4.681 2.72 8.986 8.986 0 0 0 3.74.477m.94-3.197a5.971 5.971 0 0 0-.94 3.197M15 6.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm6 3a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Zm-13.5 0a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Z",
+  uniforms: "M9 3.75 6 4.5 3 7.5l2.25 3L7.5 9.75V20.25h9V9.75l2.25.75L21 7.5l-3-3-3-.75a3 3 0 0 1-6 0Z",
+  roster:
+    "M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25ZM6.75 12h.008v.008H6.75V12Zm0 3h.008v.008H6.75V15Zm0 3h.008v.008H6.75V18Z",
   practice:
     "M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5",
   events: "M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z",

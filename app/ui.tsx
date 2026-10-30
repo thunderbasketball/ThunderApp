@@ -36,7 +36,9 @@ export function Chip({ tone = "zinc", children }: { tone?: Tone; children: React
 export function Avatar({ first, last, tone = "zinc" }: { first?: string | null; last?: string | null; tone?: Tone }) {
   const initials = `${first?.[0] ?? ""}${last?.[0] ?? ""}`.toUpperCase() || "?";
   return (
-    <span className={`flex size-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold ring-1 ring-inset ${tones[tone]}`}>
+    <span
+      className={`flex size-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold ring-1 ring-inset ${tones[tone]}`}
+    >
       {initials}
     </span>
   );
@@ -88,8 +90,17 @@ export function GroupCard({
           <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium tabular-nums text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
             {count}
           </span>
-          <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden className="size-5 text-zinc-400 transition-transform group-open:rotate-180">
-            <path fillRule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clipRule="evenodd" />
+          <svg
+            viewBox="0 0 20 20"
+            fill="currentColor"
+            aria-hidden
+            className="size-5 text-zinc-400 transition-transform group-open:rotate-180"
+          >
+            <path
+              fillRule="evenodd"
+              d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z"
+              clipRule="evenodd"
+            />
           </svg>
         </span>
       </summary>
@@ -105,6 +116,7 @@ export function PersonRow({
   avatarTone,
   chips,
   dim,
+  under,
   children,
 }: {
   first?: string | null;
@@ -112,11 +124,19 @@ export function PersonRow({
   avatarTone?: Tone;
   chips?: ReactNode;
   dim?: boolean;
+  under?: ReactNode; // shown just under the initials circle (e.g. the 👁 View-as button)
   children?: ReactNode;
 }) {
   return (
     <li className={`flex gap-3 px-4 py-3 ${dim ? "opacity-50" : ""}`}>
-      <Avatar first={first} last={last} tone={avatarTone} />
+      {under ? (
+        <div className="flex shrink-0 flex-col items-center gap-2">
+          <Avatar first={first} last={last} tone={avatarTone} />
+          {under}
+        </div>
+      ) : (
+        <Avatar first={first} last={last} tone={avatarTone} />
+      )}
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-2">
           <p className="truncate">

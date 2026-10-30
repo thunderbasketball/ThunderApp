@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { SessionUser } from "./auth/service";
-import { addPlayers, listRoster, removePlayer, rosterCandidates } from "./rosters";
+import { addPlayers, listRoster, movePlayer, removePlayer, rosterBoard, rosterCandidates } from "./rosters";
 import { createTestDb } from "./testing/db";
 
 const person = (coachId: string, firstName: string, isDirector = false): SessionUser => ({
@@ -68,6 +68,12 @@ describe("rosters", () => {
     await addPlayers(deps(), director, other, ["r4"]);
     expect((await rosterCandidates(deps(), director, other)).find((c) => c.firstName === "Ava")?.otherTeams).toEqual(["4G A"]);
     expect((await rosterCandidates(deps(), director, team)).map((c) => c.firstName)).toEqual(["Cy", "Dee"]);
+    // …but can't be put on a second team.
+    expect(await addPlayers(deps(), director, other, ["r1", "r3"])).toEqual({
+      ok: false,
+      message: "Already on another team: Ava Zed (4G A). Move them on Players → Roster players.",
+    });
+    expect(await listRoster(deps(), director, other)).toMatchObject([{ firstName: "Dee" }]); // nothing added
   });
 
   it("staff can see their roster but not change it; others can't see it", async () => {
@@ -85,5 +91,46 @@ describe("rosters", () => {
     expect(await removePlayer(deps(), director, team, "r2")).toMatchObject({ ok: false });
     await db.pool.query("delete from registrations where registrant_id = 'r1'");
     expect(await listRoster(deps(), director, team)).toMatchObject([{ firstName: "Ava", registered: false }]);
+  });
+
+  it("roster board: drag a player onto a team, to another team (moved, never on two), and back off", async () => {
+    const names = (b: Awaited<ReturnType<typeof rosterBoard>>) => ({
+      free: b!.unrostered.map((p) => p.firstName),
+      teams: b!.teams.map((t) => `${t.name}: ${t.players.map((p) => p.firstName).join(",")}`),
+    });
+    expect(names(await rosterBoard(deps(), director, "Girls", "4"))).toEqual({ free: ["Bea", "Ava"], teams: ["4G B: ", "4G A: "] }); // COMP first
+    expect(await movePlayer(deps(), director, "r1", team)).toEqual({ ok: true });
+    expect(await movePlayer(deps(), director, "r1", other)).toEqual({ ok: true });
+    expect(names(await rosterBoard(deps(), director, "Girls", "4"))).toEqual({ free: ["Bea"], teams: ["4G B: Ava", "4G A: "] });
+    expect((await listRoster(deps(), director, other))![0]).toMatchObject({ registrantId: "r1", rosteredBy: "Earl X" });
+    // A player who somehow ended up on two teams is left on just the one they're moved to; their uniform elsewhere goes too.
+    await db.pool.query(
+      `insert into team_players (team_id, registrant_id, first_name, last_name, gender, grade, grade_sort, rostered_by, rostered_at)
+       values ($1, 'r1', 'Ava', 'Zed', 'Girls', '4', 4, 'x', now())`,
+      [team],
+    );
+    await db.pool.query(
+      "insert into team_uniforms (team_id, registrant_id, number, updated_by, updated_at) values ($1, 'r1', '7', 'x', now())",
+      [team],
+    );
+    expect(await movePlayer(deps(), director, "r1", other)).toEqual({ ok: true });
+    expect(names(await rosterBoard(deps(), director, "Girls", "4")).teams).toEqual(["4G B: Ava", "4G A: "]);
+    expect((await db.pool.query("select 1 from team_uniforms where registrant_id = 'r1'")).rows).toHaveLength(0);
+    expect(await movePlayer(deps(), director, "r1", null)).toEqual({ ok: true });
+    expect(names(await rosterBoard(deps(), director, "Girls", "4")).free).toEqual(["Bea", "Ava"]);
+    // Only teams named for the grade; their free players are that grade and one below (a 3rd grader shows on the 4th grade board).
+    await reg("r5", "Eve", "Cole", "Girls", "3");
+    await reg("r6", "Fay", "Dunn", "Girls", "2");
+    expect(names(await rosterBoard(deps(), director, "Girls", "4"))).toEqual({ free: ["Bea", "Ava", "Eve"], teams: ["4G B: ", "4G A: "] });
+    expect((await rosterBoard(deps(), director, "Girls", "3"))!.teams).toHaveLength(0);
+    expect(names(await rosterBoard(deps(), director, "Girls", "5")).free).toEqual(["Dee", "Bea", "Ava"]);
+  });
+
+  it("roster board: Directors only, and checks its input", async () => {
+    expect(await rosterBoard(deps(), head, "Girls", "4")).toBeNull();
+    expect(await movePlayer(deps(), head, "r1", team)).toMatchObject({ ok: false });
+    expect(await rosterBoard(deps(), director, "Girls", "4; drop table teams")).toBeNull();
+    expect(await movePlayer(deps(), director, "nobody", team)).toEqual({ ok: false, message: "That player isn't registered." });
+    expect(await movePlayer(deps(), director, "r1", "999999")).toEqual({ ok: false, message: "That team no longer exists." });
   });
 });

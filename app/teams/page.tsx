@@ -11,6 +11,7 @@ import { Chip, GroupCard, PageTitle, Stats } from "../ui";
 import { ContactChip, GroupTextButton } from "../Contacts";
 import ChatLink from "../ChatLink";
 import NotifyButton from "../NotifyButton";
+import RosterCountButton from "./RosterCountButton";
 
 export default function TeamsPage() {
   return (
@@ -112,6 +113,7 @@ async function Teams() {
                       ))}
                       {!t.headCoach && <p className="text-sm text-amber-700 dark:text-amber-400">No head coach yet</p>}
                     </div>
+                    <RosterCountButton team={t} />
                     {t.staff.length > 0 && <ChatLink chatKey={`staff-${user.coachId}-${t.id}`} label={`Chat with ${t.name} staff`} popup />}
                     {t.staff.length > 0 && <NotifyButton audience={{ teams: [t.id] }} to={t.name} />}
                   </div>

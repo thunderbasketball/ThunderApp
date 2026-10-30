@@ -15,6 +15,7 @@ export type PlayerListItem = {
   parentEmail: string | null;
   coachRequest: string | null;
   coachingInterest: string | null;
+  team: string | null; // the team they're rostered on
 };
 
 export type PlayerGroup = { gender: "Boys" | "Girls"; grade: string; players: PlayerListItem[] };
@@ -28,6 +29,8 @@ export async function listPlayerGroups(viewer: SessionUser): Promise<{ groups: P
             nullif(trim(coalesce(parent1_first, '') || ' ' || coalesce(parent1_last, '')), '') as "parentName",
             parent1_cell as "parentCell", parent1_email as "parentEmail",
             coach_request as "coachRequest", coaching_interest as "coachingInterest",
+            (select t.name from team_players p join teams t on t.id = p.team_id
+             where p.registrant_id = registrations.registrant_id order by t.name limit 1) as team,
             imported_at as "importedAt", imported_by as "importedBy"
      from registrations
      order by gender, grade_sort, lower(last_name), lower(first_name)`,

@@ -5,6 +5,9 @@ import { listPlayerGroups } from "@/lib/players";
 import { formatCell } from "@/lib/phone";
 import { gradeLabel } from "@/lib/grades";
 import AppHeader from "../AppHeader";
+import { PlayerTeamButton } from "../ViewAsButton";
+import PlayerEvalButton from "./PlayerEvalButton";
+import RosterBoardButton from "./RosterBoardButton";
 import { Chip, GroupCard, Notice, PageTitle, PersonRow, PhoneLink, Stats } from "../ui";
 
 export default function PlayersPage() {
@@ -59,13 +62,22 @@ async function Players() {
         <div className="space-y-3">
           {groups.map((g) => (
             <GroupCard key={`${g.gender}-${g.grade}`} title={`${g.gender} · ${gradeLabel(g.grade)}`} count={g.players.length}>
+              <li className="flex justify-end px-4 py-2">
+                <RosterBoardButton gender={g.gender} grade={g.grade} />
+              </li>
               {g.players.map((p) => (
                 <PersonRow
                   key={p.registrantId}
                   first={p.firstName}
                   last={p.lastName}
                   avatarTone={p.gender === "Boys" ? "blue" : "pink"}
-                  chips={p.coachingInterest && <Chip tone="green">Parent: {p.coachingInterest}</Chip>}
+                  under={<PlayerTeamButton registrantId={p.registrantId} name={`${p.firstName} ${p.lastName}`} />}
+                  chips={
+                    <>
+                      {p.team && <Chip tone="orange">{p.team}</Chip>}
+                      {p.coachingInterest && <Chip tone="green">Parent: {p.coachingInterest}</Chip>}
+                    </>
+                  }
                 >
                   <p>
                     {p.parentName}
@@ -76,7 +88,10 @@ async function Players() {
                       </>
                     )}
                   </p>
-                  {p.coachRequest && <p>Coach request: {p.coachRequest}</p>}
+                  <div className="flex items-end justify-between gap-2">
+                    <span>{p.coachRequest && <>Coach request: {p.coachRequest}</>}</span>
+                    <PlayerEvalButton registrantId={p.registrantId} name={`${p.firstName} ${p.lastName}`} />
+                  </div>
                 </PersonRow>
               ))}
             </GroupCard>

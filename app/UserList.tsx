@@ -3,6 +3,7 @@ import type { SessionUser } from "@/lib/auth/service";
 import { deleteBlocker } from "@/lib/user-admin";
 import type { UserListItem } from "@/lib/users";
 import ChatLink from "./ChatLink";
+import { ViewAsButton } from "./ViewAsButton";
 import { AddUserButton, EditUserButton } from "./users/UserEditor";
 import { Chip, EmailLink, GroupCard, PageTitle, PersonRow, PhoneLink, Stats } from "./ui";
 
@@ -24,6 +25,7 @@ export default function UserList({ users, viewer }: { users: UserListItem[]; vie
         last={u.lastName}
         avatarTone={u.director ? "blue" : u.coach ? "green" : "zinc"}
         dim={!u.active}
+        under={u.active && u.coachId !== viewer.coachId && <ViewAsButton coachId={u.coachId} name={`${u.firstName} ${u.lastName}`} />}
         chips={
           <>
             {u.director && <Chip tone="blue">Director</Chip>}
