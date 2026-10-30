@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { SessionUser } from "./auth/service";
 import { pickContext, userContexts } from "./contexts";
-import { createTestDb } from "./testing/db";
+import { createTestDb, grant } from "./testing/db";
 
 const base: SessionUser = { coachId: "5550001", firstName: "Pat", lastName: "Test", isDirector: false, isCoach: true, requestPending: false, hasThunderRole: true };
 
@@ -40,6 +40,21 @@ describe("userContexts", () => {
     expect((await userContexts(db.pool, base)).map((x) => x.key)).not.toContain("director");
     await db.pool.query("delete from team_staff");
     expect(await userContexts(db.pool, base)).toEqual([]);
+  });
+
+  it("one Scenic City chip, with the highest Scenic City role; a Request alone gives none", async () => {
+    await grant(db.pool, "5550001 scenic-city Request");
+    expect((await userContexts(db.pool, base)).map((x) => x.key)).not.toContain("scenic");
+    await grant(db.pool, "5550001 scenic-city Coach", "5550001 scenic-city Partner");
+    const c = await userContexts(db.pool, { ...base, isDirector: true });
+    expect(c.map((x) => `${x.org}:${x.label}`)).toEqual([
+      "thunder:Director",
+      "thunder:2B Other · Asst Coach",
+      "thunder:4G Test · Head Coach",
+      "thunder:10B Other · Team Parent",
+      "scenic-city:Partner",
+    ]);
+    expect(c.at(-1)).toMatchObject({ key: "scenic", href: "/scenic", role: "Partner" });
   });
 
   it("remembers the last context only while the person still holds it", async () => {

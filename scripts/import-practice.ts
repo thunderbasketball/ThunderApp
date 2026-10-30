@@ -27,7 +27,7 @@ if (parsed.errors.length) process.exit(1);
 const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false }, options: "-c search_path=public" });
 try {
   const d = await pool.query<{ name: string }>(
-    "select first_name || ' ' || last_name as name from users where thunder_director and active order by created_at limit 1",
+    "select first_name || ' ' || last_name as name from users where has_role(coach_id, 'thunder', 'Director') and active order by created_at limit 1",
   );
   const r = await importPractice(pool, parsed, { by: d.rows[0]?.name ?? "Director", dryRun });
   console.log(dryRun ? "Dry run – would import:" : "Imported:");

@@ -7,6 +7,7 @@ import type { SessionUser } from "@/lib/auth/service";
 import { currentContexts } from "@/lib/contexts-server";
 import { db } from "@/lib/db";
 import { myEventCount } from "@/lib/events";
+import { ORGS } from "@/lib/orgs";
 import { myPracticesToday } from "@/lib/practice-attendance";
 import { localParts, TZ, zonedTime } from "@/lib/time";
 import { syncIfStale } from "@/lib/teamsnap/scheduler";
@@ -31,8 +32,9 @@ async function checkInsFor(user: SessionUser): Promise<number> {
   return events + practices;
 }
 
-// Sticky top bar: logo, the user, one chip per role to switch between them, and the Director tabs.
-// `context` is the role this page is shown as ("director" or "team:<id>"); it highlights that chip.
+// Sticky top bar: the organization's brand, the user, one chip per role to switch between them, and the Director tabs.
+// `context` is the role this page is shown as ("director", "team:<id>" or "scenic"); it highlights that chip and picks the
+// organization (Thunder unless it's "scenic"). Thunder's chat, bell and check-in only show in Thunder.
 // `teamTab`: on a team page seen as its staff, the Staff / Roster / Uniforms / Practices menu (top on a computer, bottom on
 // a phone). `alert` makes that tab flash red (Uniforms, while any player's number or size is missing).
 export default async function AppHeader({
@@ -47,14 +49,21 @@ export default async function AppHeader({
   teamTab?: { teamId: string; tab: TeamTab; alert?: TeamTab[] };
 }) {
   const deps = { pool: db, now: () => new Date() };
+  const org = context === "scenic" ? "scenic-city" : "thunder";
+  const brand = ORGS[org];
+  const thunder = org === "thunder" && user.hasThunderRole;
   const [{ contexts }, unread, myEvents, popups, chatUnread] = await Promise.all([
     currentContexts(user),
-    unreadCount(deps, user),
-    user.isDirector ? 0 : checkInsFor(user),
+    thunder ? unreadCount(deps, user) : 0,
+    thunder && !user.isDirector ? checkInsFor(user) : 0,
     // Not while a Director is viewing as this person.
-    user.actingBy ? [] : popupAnnouncements(deps, user),
-    user.hasThunderRole ? chatUnreadCount(deps, user) : 0,
+    user.actingBy || !thunder ? [] : popupAnnouncements(deps, user),
+    thunder ? chatUnreadCount(deps, user) : 0,
   ]);
+  // Chips grouped by organization; the group names show only when there's more than one.
+  const groups = (["thunder", "scenic-city"] as const)
+    .map((o) => ({ org: o, items: contexts.filter((c) => c.org === o) }))
+    .filter((g) => g.items.length);
   // Backup for the sheet timer: after this page is sent, refresh registrations if the last check is stale.
   after(syncIfStale);
   const directorTabs: { key: string; href: string; label: string; icon: string }[] = [
@@ -84,7 +93,9 @@ export default async function AppHeader({
   const showTabs = !!teamTab || (user.isDirector && context === "director");
   return (
     <>
-      <header className="sticky top-0 z-10 border-t-[3px] border-t-thunder-orange border-b border-zinc-950/5 bg-white/80 backdrop-blur-xl dark:border-white/10 dark:bg-zinc-950/80">
+      <header
+        className={`sticky top-0 z-10 border-t-[3px] ${org === "thunder" ? "border-t-thunder-orange" : "border-t-scenic-navy"} border-b border-zinc-950/5 bg-white/80 backdrop-blur-xl dark:border-white/10 dark:bg-zinc-950/80`}
+      >
         {user.actingBy && (
           <form
             action={stopActing}
@@ -99,11 +110,18 @@ export default async function AppHeader({
           </form>
         )}
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-4 py-3">
-          <Link href="/" className="flex items-center gap-2">
-            <Image src="/brand/logo-96.png" alt="Thunder Basketball" width={36} height={36} priority className="size-9" />
-            <span className="leading-tight">
-              <span className="block font-semibold tracking-tight">Thunder</span>
-              <span className="block text-xs font-medium text-thunder-orange">Basketball</span>
+          <Link href="/" className="flex min-w-0 items-center gap-2">
+            <Image
+              src={brand.logo.src}
+              alt={brand.name}
+              width={brand.logo.width}
+              height={brand.logo.height}
+              priority
+              className="h-9 w-auto shrink-0 rounded-md"
+            />
+            <span className="min-w-0 leading-tight">
+              <span className="block truncate font-semibold tracking-tight">{brand.name}</span>
+              <span className="block text-xs font-medium text-thunder-orange">CourtCaptain</span>
             </span>
           </Link>
           <div className="flex min-w-0 items-center gap-3">
@@ -115,7 +133,7 @@ export default async function AppHeader({
                 ✓ Check-in
               </Link>
             )}
-            {user.hasThunderRole &&
+            {thunder &&
               // Directors: the bubble chats with every Head Coach (the full list is linked inside).
               (user.isDirector ? (
                 <ChatPopup chatKey={`heads-${user.coachId}`} label="Chat with all Head Coaches" className={headerBtn} allChats>
@@ -126,7 +144,7 @@ export default async function AppHeader({
                   <HeaderIcon d={ICONS.chat} badge={chatUnread} />
                 </Link>
               ))}
-            {user.hasThunderRole &&
+            {thunder &&
               // Directors: the bell notifies all team staff (their own announcements are linked inside).
               (user.isDirector ? (
                 <NotifyButton audience={{ roles: ALL_STAFF }} to="all team staff" className={headerBtn} inbox>
@@ -152,24 +170,36 @@ export default async function AppHeader({
 
         {contexts.length > 1 && (
           <nav aria-label="Switch role" className="mx-auto max-w-3xl">
-            <div className="flex gap-2 overflow-x-auto px-4 pb-3 [scrollbar-width:none]">
-              {contexts.map((c) => {
-                const on = c.key === context;
-                return (
-                  <a
-                    key={c.key}
-                    href={`/switch?to=${encodeURIComponent(c.key)}`}
-                    aria-current={on ? "true" : undefined}
-                    className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold whitespace-nowrap ring-1 ring-inset transition-colors ${
-                      on
-                        ? "bg-thunder-orange text-white ring-thunder-orange"
-                        : "bg-white text-zinc-600 ring-zinc-950/10 hover:text-zinc-900 dark:bg-zinc-900 dark:text-zinc-300 dark:ring-white/15"
-                    }`}
+            <div className="flex items-center gap-2 overflow-x-auto px-4 pb-3 [scrollbar-width:none]">
+              {groups.map((g, i) => [
+                groups.length > 1 && (
+                  <span
+                    key={g.org}
+                    className={`shrink-0 text-[11px] font-semibold tracking-wide whitespace-nowrap text-zinc-500 uppercase dark:text-zinc-400 ${i ? "ml-2" : ""}`}
                   >
-                    {c.label}
-                  </a>
-                );
-              })}
+                    {g.org === "thunder" ? "Thunder" : "Scenic City"}
+                  </span>
+                ),
+                ...g.items.map((c) => {
+                  const on = c.key === context;
+                  return (
+                    <a
+                      key={c.key}
+                      href={`/switch?to=${encodeURIComponent(c.key)}`}
+                      aria-current={on ? "true" : undefined}
+                      className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold whitespace-nowrap ring-1 ring-inset transition-colors ${
+                        on
+                          ? c.org === "thunder"
+                            ? "bg-thunder-orange text-white ring-thunder-orange"
+                            : "bg-scenic-navy text-white ring-scenic-navy dark:bg-white dark:text-scenic-navy dark:ring-white"
+                          : "bg-white text-zinc-600 ring-zinc-950/10 hover:text-zinc-900 dark:bg-zinc-900 dark:text-zinc-300 dark:ring-white/15"
+                      }`}
+                    >
+                      {c.label}
+                    </a>
+                  );
+                }),
+              ])}
             </div>
           </nav>
         )}

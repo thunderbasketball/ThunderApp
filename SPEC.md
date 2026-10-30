@@ -10,17 +10,20 @@ Same features, same rules. This file is the source of truth for behavior.
 | Stack | Next.js (App Router, TypeScript) + Supabase (Postgres) |
 | Hosting | Local development for now (Mac). Hosting decided later (Vercel was the candidate). |
 | Email | Resend, sending from the thunderbball.org domain |
-| MasterAuth Sheet | Import existing users once. Two-way sync until go-live (Scenic City also uses it), then the app is the only source |
+| MasterAuth Sheet | Users were imported once. *Retired (Oct 30, 2026):* no sync; the app is the only source for users and roles (Thunder and Scenic City) |
 | Migration | Migrate everything: users, teams + staff, gyms/courts/slots/bookings/blackouts, evaluations, Interested marks, rosters, registrations |
 
 ## Open questions (decide before the phase that needs them)
 
-1. **PIN storage vs. two-way sync.** *Decided (Oct 28, 2026):* two-way sync with MasterAuth runs **only until this app goes live**; then the sync stops and the app is the only source. Existing users are imported from MasterAuth once. All new users are created in the app. Until go-live, PINs follow option (a): the app stores only a hash and writes the plain PIN to the Sheet when it changes, so Scenic City keeps working.
+1. **PIN storage vs. two-way sync.** *Decided:* no sync (MasterAuth retired Oct 30, 2026). PINs are stored only as a hash.
 2. **Who wins when both sides change the same user?** Proposed: most recent change wins, by timestamp, field by field. *Needed before: Phase 2.*
 3. **Weekend slots.** *Decided:* there are no weekend slots today; weeks are counted Monday 00:00 to the next Monday (Eastern), so a weekend slot would count with the Mon–Fri before it. Revisit if weekend slots are added.
 4. **Director bookings.** *Decided:* the Director is exempt from team limits (the app warns when a team goes over).
 5. **Evaluation fields.** *Decided:* same as the Sheet's Evaluations tab: Position (Guard/Wing/Post), Height (Short/Average/Tall), Speed (Slow/Average/Fast), Score 1–5, Notes (up to 1000 characters), Interested (the Sheet's Pickup).
 6. **Registration eligibility.** *Decided:* TeamSnap gives gender and grade (see section 1 import). Evaluations: same gender, the team's grade(s) or one grade below.
+7. **Old Scenic City app.** *Decided (Oct 30, 2026):* retired, along with the MasterAuth sync. Both Thunder and Scenic City live in this app.
+8. **Partner details.** *Decided:* a Partner is a School or Organization that hosts games, registers teams, or both; Thunder becomes one. One person can be a contact for more than one partner. A new partner needs Scenic City Director approval before its teams can register (approving the person approves the new partner).
+9. **Team creation.** *Decided:* see section 13, "Creating teams".
 
 ---
 
@@ -41,10 +44,7 @@ Same features, same rules. This file is the source of truth for behavior.
 | Cell | 10 digits |
 | Email | Current email |
 | VerifiedEmail | The email that passed a code check |
-| ThunderRequest | Boolean — access request pending |
-| ThunderCoach | Boolean |
-| ThunderDirector | Boolean |
-| ScenicCityRequest, ScenicCityCoach, ScenicCityDirector, ScenicCityAssociations | Scenic City only. This app **never writes** these. Sync must keep them as they are. |
+| Roles | Not on the user record: held per organization in `org_roles` (section 13). Thunder: Request (access request pending), Coach, Director. Scenic City: Request, Coach, Director, Partner, Solo. ThunderRequest/ThunderCoach/ThunderDirector below mean those Thunder roles. |
 
 - Email is **verified** only when `Email = VerifiedEmail` (case-insensitive, trimmed). A verified email is **required** to log in.
 
@@ -182,20 +182,9 @@ Example: Team has Thu 6PM. Mon 6PM is within 72h → can add it (N=1). Once Mon 
   - Validate the whole file **before** clearing old registrations. If anything fails, nothing changes; show the row-level errors.
   - Import replaces registrations in one transaction. Don't touch unrelated scheduled jobs.
 
-## 7. MasterAuth sync (two-way)
+## 7. MasterAuth sync (retired)
 
-- Supabase is the app's working database; the MasterAuth Sheet stays in step with it.
-- **App → Sheet** (built; `MASTERAUTH_SYNC=on` in `.env.local`, the sheet shared with the service account as **Editor**): a database trigger queues every change to a user (name, cell, email, VerifiedEmail, PIN, ThunderRequest/Coach/Director, new user, deleted user) in `masterauth_outbox`; every minute the server writes queued users to their row, matched by CoachID, only the cells that differ.
-  - Written: FirstName, LastName, EmailAddress, VerifiedEmail, ThunderRequest, ThunderCoach, ThunderDirector, and PIN. **Never** written: Active on an existing row (shared with Scenic City; deactivating in Thunder doesn't block Scenic City), the Scenic City columns, ThunderAdmin, TempAuthCode, CodeExpiration, DeviceID, LastLogin.
-  - **PIN**: the app only knows a PIN when someone sets it (Set Your PIN, Forgot PIN, Create Account). It's held encrypted (`MASTERAUTH_PIN_KEY`) until written, then deleted. After **Reset login** the sheet gets 1234. Otherwise the sheet's PIN is left alone. With the sync off, PINs aren't kept at all.
-  - **New user**: a new row with CoachID, names, Active = TRUE, PIN (or 1234), CellNumber, email and Thunder roles; other columns left empty.
-  - **Deleted user**: the row stays; ThunderRequest/Coach/Director set to FALSE.
-  - Values are written RAW (never run as formulas); text starting with `= + - @` is prefixed with `'`. Right before writing, the CoachIDs of the rows are read again; if rows moved, nothing is written and it tries again.
-  - A failure is retried (1, 2, 4… up to 60 minutes apart) and never blocks the app; the Users page shows a red note while it's failing.
-- **Sheet → App**: a scheduled job (every few minutes) reads the Sheet and applies changes made by Scenic City or by hand.
-- Conflict rule: see Open Question 2.
-- Writing to the Sheet guards against formula injection (any text starting with `= + - @` is prefixed with `'`).
-- Sync failures are logged and retried; they never block a login.
+Retired Oct 30, 2026. Users were imported from the MasterAuth sheet once; since then the app is the only source for users, PINs and roles. Nothing is read from or written to that sheet.
 
 ## 8. Migration
 
@@ -272,3 +261,67 @@ The last three are started by one Director: only their members get unread counts
 - **Practice attendance**: the Director and the team's staff (any role) check in the team's **roster** with the same ? → ✓ → ✗ screen. No roster yet → it says so. Each upcoming practice on the team page links to its attendance. Who marked each player is recorded.
 - The green **✓ Check-in** button in the header shows for people who run check-in for an event from yesterday on, or whose team practices today.
 
+
+## 13. CourtCaptain: organizations & Partners (planned)
+
+The app is **CourtCaptain** (logo in `public/`). Its parts: **Players, Practice, Uniforms, Teams, Partners, Solo**. Thunder Basketball is the first **organization**; Scenic City Basketball (a league) is the second. Every page shows the organization you're working in (name, logo, colors) under the CourtCaptain brand.
+
+### Organizations & roles
+- Table `organizations`: Thunder Basketball, Scenic City Basketball (slug, name, logo, colors). More can be added later without code changes.
+- Roles are held **per organization** in `org_roles` (user, organization, role, granted by, when):
+  | Organization | Roles |
+  |---|---|
+  | Thunder | Request, Coach, Director |
+  | Scenic City | Request, Coach, Director, **Partner** (replaces Associations), **Solo** |
+- *Done (steps 1–2):* the old role columns moved into `org_roles` (ScenicCityAssociations = TRUE → Partner) and were removed. Code checks roles with the database functions `has_role(coach_id, org, role)` and changes them with `set_role(coach_id, org, role, on, by)`.
+- Team staff roles (HeadCoach, AsstCoach, Manager, TeamParent) stay per team; every team belongs to one organization.
+- A Director manages users, roles and data **only for their own organization**. Being a Thunder Director gives no Scenic City rights, and the reverse is also true.
+- Login: any active role in any organization lets you in. A person with only a Request (no role) sees "Still pending."
+
+### Switching organizations
+- The header chips are grouped by organization (e.g. Thunder: Director, 4G Epps · HeadCoach; Scenic City: Director). One tap switches; the brand, tabs and home page follow the chosen chip. You stay signed in. The last chip is remembered.
+- Each organization has its own section of the site (Scenic City under `/scenic`). Every page and endpoint checks the role **in that organization** on the server.
+- Someone with roles in only one organization never sees the other one.
+
+### Sign-up (Partner or Solo)
+- Each organization has its own **join link** (e.g. `/join/scenic-city`) showing that organization's logo. The Director shares it with new partners.
+- It runs the normal Create Account flow (section 1), then asks them to choose **Partner** or **Solo**. Partner → **pick an existing partner** or **add a new one** (name, School or Organization, Hosting games / Registering teams / Both), recorded as a **Partner request**. Solo → recorded as a **Solo request**. Someone who already has an account logs in and gets **Request access to Scenic City** instead.
+- The organization's Directors see requests on their Users page and approve (as Partner, Solo, Coach or Director) or deny. Approving clears the request. **For now every Solo request must be approved** before that person can create teams.
+
+### Partners
+- A **Partner** is a **School or Organization** working with Scenic City. Partner record: name, type (School / Organization), what they do: **Hosting games**, **Registering teams**, or **Both**, and its contact people (users with the Partner role for that partner).
+- **Thunder Basketball becomes a Partner** of Scenic City (Organization, Both). Thunder's teams can register into Scenic City programs from Thunder's own team list.
+- **Hosting partners** provide **court availability**: their gyms, courts, and the hours those courts are open on Scenic City's **game days** (e.g. 9 AM–9 PM). Scenic City Directors choose the game days.
+- **Registering partners** register their teams into Scenic City programs.
+
+### Scenic City programs
+- Scenic City runs three kinds of **programs**: **Circuit**, **League**, and **Tournament**. Each program has a name, season/dates, the divisions it offers (gender + grade), and registration open/close dates.
+- Teams register into a program by division. A team can come from:
+  - a **Partner** (its own teams, e.g. a school's team or a Thunder team), or
+  - an individual using **CourtCaptain – Solo** (no partner; see "Creating teams").
+- Teams can also be **formed from player registrations**, as Thunder does today.
+- Scenic City Directors see every program's registered teams, and every partner's court availability. Game scheduling (step 7) puts registered teams into the hosts' open court times.
+
+### Creating teams
+- **Part of an organization or partner** → that organization's or partner's **Directors** (for a partner: its contact people) create its teams. Coaches and other members don't create teams themselves.
+- **Individuals** (not part of an organization or partner) use **CourtCaptain – Solo**: they register their own team, or a set of teams, and manage them themselves (staff, program registration). The person who creates a Solo team is its manager. Needs the approved **Solo** role (Scenic City).
+- Fields: **Team name, Gender, Grade, Coach first name, Coach last name, Coach cell**. All required; cell checked like a login (10 digits).
+- The coach's cell **is their login** (CoachID = last 7 digits). A cell already in the app uses that person. A new cell creates their login (starter PIN 1234, no email); their email is collected and verified at their first login (section 1, step 2).
+- The coach gets the Scenic City Coach role and is the team's Head Coach. Who created the team is recorded.
+- The team then registers into programs (Circuit, League, Tournament) by division.
+
+### Build order
+1. *Done:* Organizations + `org_roles` table, existing roles moved over.
+2. *Done:* Login, Users page and everything else read and write `org_roles`; the old role columns are removed.
+3. *Built:* Header organization switching + CourtCaptain/organization branding; Scenic City home page (`/scenic`, a card per coming part for the person's role). The header shows the organization's logo and name with "CourtCaptain" under it; Scenic City has its own logo (`public/brand/scenic-city-*.png`). Thunder's chat, bell and check-in show only in Thunder. Chips are grouped under Thunder / Scenic City; one Scenic City chip shows the highest Scenic City role (Director, Partner, Solo, Coach). Login page shows the CourtCaptain logo.
+4. *Built:* Join link + Partner/Solo requests + Scenic City Users page.
+   - `/join/scenic-city` (Scenic City logo): not logged in → the normal login; **Create Account there logs the new person straight in** (no Thunder request) so they can finish joining. Logged in → choose **Partner** (pick an approved partner, or add a new one: name, School/Organization, Hosting games and/or Registering teams) or **Solo** → a Scenic City Request plus what they asked for (`access_requests`). Already a member → link to Scenic City; already asked → "Request pending".
+   - A new partner's name matching an existing one (any case) uses that one. Names: letters, numbers, spaces and `. ' & - , ( )`, starting with a letter or number.
+   - `/scenic/users` (Scenic City Directors only; linked from the Users card on the Scenic City home, which shows how many requests are waiting): **Join requests** (oldest first: who, Partner/Solo, the partner and whether it's new, cell, email) with **Approve as …** / **Deny**; **Scenic City people** (by last name) with role chips, their partners, who last granted them a role, and **Edit** (Director, Partner, Solo, Coach checkboxes; can't remove your own Director).
+   - Approve as Partner: the partner becomes approved and the person its contact. Deny: no role; a new partner nobody else asked for is deleted. Removing Partner takes the person off their partners' contacts.
+   - Thunder Basketball is an approved partner (Organization, hosting and registering) with no contacts yet.
+5. Partner records + court availability (hosting partners). Built in two parts:
+   - **5a. Game days, partners, gyms & courts.** Scenic City Directors set the **game days** (dates Scenic City plays; add one date or a weekly repeat: weekdays + a date range; remove a day). Everyone in Scenic City can see them. **Partners page**: Scenic City Directors see every partner (add, edit name / School or Organization / Hosting / Registering, approve); a partner's contacts see only their own partners. A partner's page lists its contacts and its **gyms** (name, address) and each gym's **courts**; its contacts and Scenic City Directors add, rename and remove them (removing warns; it also removes that gym's or court's open times). Names: letters, numbers, spaces and `. ' & - , ( ) # /`, starting with a letter or number.
+   - **5b. Open times.** For each court, the hours it's open on each game day (e.g. 9:00 AM–9:00 PM, Eastern), one window per court per day. **Repeat**: pick courts, weekdays and a date range plus a start and end time; it fills every game day that matches. Clear a day or a range. Who set each window and when is recorded.
+6. Creating teams (organization/partner Directors + Solo) + programs (Circuit, League, Tournament) + team registration into programs.
+7. Game scheduling.

@@ -4,7 +4,7 @@ Web app for Thunder Basketball (youth basketball). Rebuild of the Google Apps Sc
 **SPEC.md is the source of truth for behavior.** Read it before changing features.
 
 Stack: Next.js + Supabase (Postgres), email via Resend. Built and run locally for now; hosting decided later.
-Secrets live only in `.env.local` (never committed, never pasted into chat). Two-way sync with the MasterAuth Google Sheet (shared with the Scenic City app).
+Secrets live only in `.env.local` (never committed, never pasted into chat). The app is the only source for users and roles (Thunder and Scenic City); the old MasterAuth sheet sync is retired.
 
 @AGENTS.md
 
@@ -16,14 +16,12 @@ Secrets live only in `.env.local` (never committed, never pasted into chat). Two
 - `npm run db:migrate` — apply new `db/migrations/*.sql` files
 - `npm run user -- list | add <cell> <first> <last> [email] | director <cell> | delete <cell>` — test accounts until the Users tab exists
 - `npm run import:teamsnap -- --sheet [--dry-run]` (or a `"data/import/<file>.csv"` path) — replace registrations from the Winter Registrations sheet's TeamSnapAPI tab (all columns kept; birthdates shifted +1 day when TeamSnap shows an evening time)
-- `npm run import:users -- [--dry-run]` — import existing users from MasterAuth (`MASTERAUTH_SHEET`); safe to re-run. Sheet wins for names/emails/PINs/Active, Thunder roles combined, Scenic City columns copied. Never prints PINs.
 - `npm run import:practice -- [--dry-run]` — import Gyms, PracticeSlots, BlackOuts tabs; safe to re-run (existing slots left alone). Booking rules live in `lib/practice/booking.ts`; times are Eastern via `lib/time.ts`.
 - `npm run import:evaluations -- [--dry-run]` — import the sheet's Evaluations tab; safe to re-run (cards already in the app left alone). Rules in `lib/evaluations.ts`.
 - `npm run import:teams -- [--dry-run]` — import the sheet's Teams tab; safe to re-run (keeps existing teams, adds staff who now exist). Staff matched by CoachID to users, else to a registration parent's cell (creates their login).
-- Google Sheets: read as service account `thunder-sheets@thunderapp-513001.iam.gserviceaccount.com` via `lib/google/sheets.ts`; key in `data/google-service-account.json` (never print or paste it); sheet links in `.env.local` (`REGISTRATIONS_SHEET`). Share each sheet with that email.
+- Google Sheets: read as service account `thunder-sheets@thunderapp-513001.iam.gserviceaccount.com` via `lib/google/sheets.ts`; key in `data/google-service-account.json` locally, or the `GOOGLE_SERVICE_ACCOUNT_JSON` setting on a host like Netlify (never print or paste it); sheet links in `.env.local` (`REGISTRATIONS_SHEET`). Share each sheet with that email.
 - While the server runs, `instrumentation.ts` syncs registrations from the sheet every `REGISTRATIONS_SYNC_MINUTES` (default 5) via `lib/teamsnap/sync.ts`: replaces only when the tab changed, never on parse errors or a >50% drop; status in the `sync_status` table, shown on the Players page. Backup: `AppHeader` calls `syncIfStale()` via `after()`, so any page view refreshes a stale sync (the timer only starts when the server starts).
 - Announcements (`lib/announcements.ts`): `lib/notify/scheduler.ts` (started from `instrumentation.ts`) emails anything unread for 8 hours, checking every 15 min; `APP_URL` is the link in those emails.
-- MasterAuth write-back (`lib/masterauth/push.ts`, started from `instrumentation.ts` when `MASTERAUTH_SYNC=on`): a `users` trigger queues changes in `masterauth_outbox`; every minute only Thunder's columns are written (never Active on existing rows, never Scenic City). PINs set at login are queued encrypted with `MASTERAUTH_PIN_KEY`. Needs the sheet shared as Editor.
 - `data/` holds real exports with personal info: gitignored, never commit or paste it
 - Database access is server-only via `lib/db.ts` (pg pool on `DATABASE_URL`, Supabase Session pooler).
   Tables live in `public` (visible in the Supabase dashboard), locked: every new table needs `enable row level security` + `revoke all ... from anon, authenticated` (see 003_lock_tables.sql). Tests run in a throwaway `app_test_*` schema.
@@ -43,5 +41,5 @@ Secrets live only in `.env.local` (never committed, never pasted into chat). Two
 - Escape all user text before rendering it as HTML.
 - Validate all input on the server. Guard against formula injection (`= + - @`) on anything written to Sheets or CSV.
 - Writes that can collide (bookings, rosters, codes, PIN tries) run in a transaction.
-- Never write the Scenic City columns (ScenicCityRequest, ScenicCityCoach, ScenicCityDirector, ScenicCityAssociations).
+- A Director manages only their own organization (Thunder or Scenic City; SPEC section 13). Check the role in that organization on the server.
 - Find practice slots by Gym + Court + Time, never by position.

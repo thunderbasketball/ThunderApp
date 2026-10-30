@@ -1,6 +1,6 @@
 import { generateKeyPairSync } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { readTab, spreadsheetIdOf } from "./sheets";
+import { loadServiceAccount, readTab, spreadsheetIdOf } from "./sheets";
 
 const ID = "1fanbOA5o9ed14S1ZuBE7OxzV_On2mGuEpue8yMUlgyA";
 
@@ -11,6 +11,21 @@ describe("spreadsheetIdOf", () => {
   });
   it("refuses anything else", () => {
     expect(() => spreadsheetIdOf("https://example.com/x")).toThrow(/Google Sheet link/);
+  });
+});
+
+describe("loadServiceAccount", () => {
+  const k = { client_email: "a@x.iam.gserviceaccount.com", private_key: "-----BEGIN PRIVATE KEY-----\nabc\n-----END PRIVATE KEY-----\n" };
+
+  it("reads the key from GOOGLE_SERVICE_ACCOUNT_JSON as JSON or base64 (no file needed)", () => {
+    expect(loadServiceAccount("/no/such/file", JSON.stringify(k))).toMatchObject(k);
+    expect(loadServiceAccount("/no/such/file", Buffer.from(JSON.stringify(k)).toString("base64"))).toMatchObject(k);
+  });
+
+  it("explains a bad setting or a missing file", () => {
+    expect(() => loadServiceAccount("/no/such/file", "not json")).toThrow("GOOGLE_SERVICE_ACCOUNT_JSON isn't valid");
+    expect(() => loadServiceAccount("/no/such/file", '{"client_email":"a"}')).toThrow("isn't a service account key");
+    expect(() => loadServiceAccount("/no/such/file", "")).toThrow("Can't read the Google key file at /no/such/file");
   });
 });
 

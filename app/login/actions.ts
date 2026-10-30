@@ -51,6 +51,7 @@ export async function startSignup(form: {
   email: string;
   pin1: string;
   pin2: string;
+  join?: string;
 }) {
   return run(() => auth.startSignup(deps, form));
 }

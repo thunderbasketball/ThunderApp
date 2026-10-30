@@ -134,7 +134,7 @@ export async function personOptions(deps: Deps, viewer: SessionUser): Promise<{ 
   if (!viewer.isDirector) throw new Error("Director only");
   const users = await deps.pool.query<PersonOption>(
     `select 'user:' || coach_id as value, first_name as "firstName", last_name as "lastName",
-            case when thunder_director then 'Director' when thunder_coach then 'Coach' else 'User' end as detail
+            case when has_role(coach_id, 'thunder', 'Director') then 'Director' when has_role(coach_id, 'thunder', 'Coach') then 'Coach' else 'User' end as detail
      from users where active order by lower(last_name), lower(first_name)`,
   );
   const volunteers = await deps.pool.query<PersonOption>(
@@ -188,7 +188,7 @@ async function resolvePerson(
     const last = cleanName(v?.last);
     if (!v || !first || !last || !/^\d{10}$/.test(v.cell ?? ""))
       throw new UserError("That volunteer needs a name and a 10-digit cell before they can be added.");
-    found = await createOrMatchUser(q, { first, last, cell: v.cell, email: cleanEmail(v.email) }, isCoach, now);
+    found = await createOrMatchUser(q, { first, last, cell: v.cell, email: cleanEmail(v.email) }, now);
   } else if (person && typeof person === "object") {
     const p = person as NewPerson;
     const first = cleanName(p.first);
@@ -199,16 +199,13 @@ async function resolvePerson(
     if (!first || !last) throw new UserError("Enter a first and last name (letters only).");
     if (!cell) throw new UserError("Enter a 10-digit cell number.");
     if (emailText && !email) throw new UserError("That email doesn't look right.");
-    found = await createOrMatchUser(q, { first, last, cell, email }, isCoach, now);
+    found = await createOrMatchUser(q, { first, last, cell, email }, now);
   } else {
     throw new UserError("Pick a person.");
   }
 
-  if (isCoach)
-    await q.query(
-      "update users set thunder_coach = true, thunder_request = false, updated_at = $2 where coach_id = $1 and not thunder_coach",
-      [found.coachId, now],
-    );
+  // Head and Assistant Coaches get the Thunder Coach role.
+  if (isCoach) await q.query("select set_role($1, 'thunder', 'Coach', true, null), set_role($1, 'thunder', 'Request', false, null)", [found.coachId]);
   return found;
 }
 
@@ -216,7 +213,6 @@ async function resolvePerson(
 async function createOrMatchUser(
   q: PoolClient,
   p: { first: string; last: string; cell: string; email: string | null },
-  isCoach: boolean,
   now: Date,
 ): Promise<{ coachId: string; lastName: string; who: string; newLogin: boolean }> {
   const coachId = coachIdFromCell(p.cell);
@@ -233,9 +229,9 @@ async function createOrMatchUser(
   if (e && !e.active) throw new UserError(`${e.first_name} ${e.last_name} has a deactivated account.`);
   if (e) return { coachId, lastName: e.last_name, who: `${e.first_name} ${e.last_name}`, newLogin: false };
   await q.query(
-    `insert into users (coach_id, first_name, last_name, cell, email, thunder_coach, created_at, updated_at)
-     values ($1, $2, $3, $4, $5, $6, $7, $7)`,
-    [coachId, p.first, p.last, p.cell, p.email, isCoach, now],
+    `insert into users (coach_id, first_name, last_name, cell, email, created_at, updated_at)
+     values ($1, $2, $3, $4, $5, $6, $6)`,
+    [coachId, p.first, p.last, p.cell, p.email, now],
   );
   return { coachId, lastName: p.last, who: `${p.first} ${p.last}`, newLogin: true };
 }

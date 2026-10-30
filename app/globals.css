@@ -14,6 +14,8 @@
   --color-thunder-blue: #1b41e7;
   --color-thunder-blue-dark: #1533b8;
   --color-thunder-orange: #ec8034;
+  /* Scenic City (CourtCaptain logo navy) */
+  --color-scenic-navy: #13294b;
 }
 
 @media (prefers-color-scheme: dark) {

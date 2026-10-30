@@ -18,7 +18,8 @@ export async function createTestDb() {
     pool,
     async reset() {
       const r = await pool.query<{ tablename: string }>(
-        "select tablename from pg_tables where schemaname = $1 and tablename <> 'schema_migrations'",
+        // Keep the migrations log and reference data the migrations seed (organizations and their roles).
+        "select tablename from pg_tables where schemaname = $1 and tablename not in ('schema_migrations', 'organizations', 'org_role_types')",
         [schema],
       );
       if (r.rows.length) await pool.query(`truncate ${r.rows.map((t) => t.tablename).join(", ")} cascade`);
@@ -56,3 +57,15 @@ export function testMailer() {
     },
   };
 }
+
+// Gives roles, each as "<coachId> <org> <role>", e.g. grant(pool, "9913694 thunder Director").
+export async function grant(pool: { query: (text: string, params: unknown[]) => Promise<unknown> }, ...roles: string[]) {
+  for (const r of roles) {
+    const [coachId, org, role] = r.split(" ");
+    await pool.query("insert into org_roles (coach_id, org, role, granted_by) values ($1, $2, $3, 'test')", [coachId, org, role]);
+  }
+}
+
+// Thunder roles as columns, for checking a user row: `select ${THUNDER_ROLES} from users ...`.
+export const THUNDER_ROLES = `has_role(coach_id, 'thunder', 'Request') as thunder_request,
+  has_role(coach_id, 'thunder', 'Coach') as thunder_coach, has_role(coach_id, 'thunder', 'Director') as thunder_director`;

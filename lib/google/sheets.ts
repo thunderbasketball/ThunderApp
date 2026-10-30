@@ -1,5 +1,6 @@
-// Reads Google Sheets as the app's service account (thunder-sheets@...).
-// The key file lives in data/ (gitignored); each sheet must be shared with the account's email.
+// Reads Google Sheets as the app's service account (thunder-sheets@...). Each sheet must be shared with the account's email.
+// The key: GOOGLE_SERVICE_ACCOUNT_JSON (the key file's contents, or that base64-encoded; for hosts like Netlify, which
+// don't have data/), else the key file in data/ (gitignored).
 import { createSign } from "node:crypto";
 import { readFileSync } from "node:fs";
 
@@ -9,8 +10,19 @@ export const READ_SCOPE = "https://www.googleapis.com/auth/spreadsheets.readonly
 
 export function loadServiceAccount(
   file = process.env.GOOGLE_SERVICE_ACCOUNT_FILE ?? "data/google-service-account.json",
+  json = process.env.GOOGLE_SERVICE_ACCOUNT_JSON,
 ): ServiceAccount {
   let key: Partial<ServiceAccount>;
+  if (json?.trim()) {
+    const text = json.trim().startsWith("{") ? json : Buffer.from(json, "base64").toString("utf8");
+    try {
+      key = JSON.parse(text);
+    } catch {
+      throw new Error("GOOGLE_SERVICE_ACCOUNT_JSON isn't valid (paste the whole key file, or it base64-encoded).");
+    }
+    if (!key.client_email || !key.private_key) throw new Error("GOOGLE_SERVICE_ACCOUNT_JSON isn't a service account key.");
+    return key as ServiceAccount;
+  }
   try {
     // Read at runtime only; keeps the build from bundling the project folder (and data/) into the server output.
     key = JSON.parse(readFileSync(/*turbopackIgnore: true*/ file, "utf8"));
@@ -75,54 +87,4 @@ export async function readTab(deps: Deps, spreadsheetId: string, tab: string): P
     throw new Error(`The sheet has no tab named "${tab}".`);
   if (!res.ok) throw new Error(`Google Sheets error: ${body.error?.message ?? res.status}`);
   return (body.values ?? []).map((r: unknown[]) => r.map((c) => String(c ?? "")));
-}
-
-// ---- Writing (MasterAuth sync). The sheet must be shared with the account as Editor. ----
-
-export const WRITE_SCOPE = "https://www.googleapis.com/auth/spreadsheets";
-
-// 1 → A, 27 → AA.
-export function columnLetter(n: number): string {
-  let s = "";
-  for (; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + ((n - 1) % 26)) + s;
-  return s;
-}
-
-const quoted = (tab: string) => `'${tab.replace(/'/g, "''")}'`;
-
-async function writeCall(deps: Deps, url: string, body: object): Promise<void> {
-  const token = await accessToken(deps, WRITE_SCOPE);
-  const res = await (deps.fetch ?? fetch)(url, {
-    method: "POST",
-    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (res.ok) return;
-  const b = await res.json().catch(() => ({}));
-  if (res.status === 403 || res.status === 404)
-    throw new Error(`Can't write to that sheet. Share it with ${deps.key.client_email} (Editor).`);
-  throw new Error(`Google Sheets error: ${b.error?.message ?? res.status}`);
-}
-
-// Sets single cells (row and column are 1-based). RAW: values are stored exactly as given, never run as formulas.
-export async function writeCells(
-  deps: Deps,
-  spreadsheetId: string,
-  tab: string,
-  cells: { row: number; col: number; value: string | boolean }[],
-): Promise<void> {
-  if (!cells.length) return;
-  await writeCall(deps, `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchUpdate`, {
-    valueInputOption: "RAW",
-    data: cells.map((c) => ({ range: `${quoted(tab)}!${columnLetter(c.col)}${c.row}`, values: [[c.value]] })),
-  });
-}
-
-// Adds a row under the last one. null leaves that column empty (untouched).
-export async function appendRow(deps: Deps, spreadsheetId: string, tab: string, values: (string | boolean | null)[]): Promise<void> {
-  await writeCall(
-    deps,
-    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(quoted(tab))}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
-    { values: [values] },
-  );
 }

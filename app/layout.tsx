@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Thunder Basketball",
-  description: "Thunder Basketball teams, practices and rosters",
+  title: "CourtCaptain",
+  description: "CourtCaptain: Thunder Basketball and Scenic City Basketball teams, practices, rosters and leagues",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

@@ -9,8 +9,9 @@ export default function LoginPage() {
   return (
     <main className="mx-auto w-full max-w-sm flex-1 px-4 py-12">
       <div className="mb-8 flex flex-col items-center gap-3">
-        <Image src="/brand/logo-256.png" alt="Thunder Basketball logo" width={112} height={112} priority className="size-28" />
-        <h1 className="text-2xl font-semibold tracking-tight">Thunder Basketball</h1>
+        <Image src="/brand/courtcaptain.png" alt="CourtCaptain" width={768} height={512} priority className="h-auto w-60" />
+        <h1 className="sr-only">CourtCaptain</h1>
+        <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Thunder Basketball · Scenic City Basketball</p>
       </div>
       {devBypass && (
         <p className="mb-6 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900 ring-1 ring-inset ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-200">

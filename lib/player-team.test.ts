@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { SessionUser } from "./auth/service";
 import { playerTeam } from "./player-team";
-import { createTestDb } from "./testing/db";
+import { createTestDb, grant } from "./testing/db";
 
 const person = (coachId: string, isDirector: boolean): SessionUser => ({
   coachId,
@@ -29,9 +29,10 @@ describe("player team", () => {
   beforeEach(async () => {
     await db.reset();
     await db.pool.query(
-      `insert into users (coach_id, first_name, last_name, cell, thunder_director, thunder_coach) values
-         ('9913694', 'Dee', 'X', '4239913694', true, false), ('5550001', 'Cal', 'Coach', '4235550001', false, true)`,
+      `insert into users (coach_id, first_name, last_name, cell) values
+         ('9913694', 'Dee', 'X', '4239913694'), ('5550001', 'Cal', 'Coach', '4235550001')`,
     );
+    await grant(db.pool, "9913694 thunder Director", "5550001 thunder Coach");
     const t = await db.pool.query<{ id: string }>(
       `insert into teams (name, gender, grades, grade_sort, level, created_by) values ('4G Coach', 'Girls', '{4}', 4, 'REC', 'x') returning id::text`,
     );

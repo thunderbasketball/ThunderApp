@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { createTestDb, testClock, testMailer } from "../testing/db";
+import { createTestDb, testClock, testMailer, grant } from "../testing/db";
 import { hashPin } from "./crypto";
 import { bearerToken, mobileLoginStep } from "./mobile";
 import * as auth from "./service";
@@ -23,10 +23,11 @@ const CELL = "4235551234";
 
 async function addUser() {
   await db.pool.query(
-    `insert into users (coach_id, first_name, last_name, active, pin_hash, cell, email, verified_email, thunder_coach)
-     values ('5551234', 'Earl', 'Epps', true, $1, $2, 'earl@example.com', 'earl@example.com', true)`,
+    `insert into users (coach_id, first_name, last_name, active, pin_hash, cell, email, verified_email)
+     values ('5551234', 'Earl', 'Epps', true, $1, $2, 'earl@example.com', 'earl@example.com')`,
     [await hashPin("5678"), CELL],
   );
+  await grant(db.pool, "5551234 thunder Coach");
 }
 
 describe("phone app login", () => {

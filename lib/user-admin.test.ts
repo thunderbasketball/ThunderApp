@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { SessionUser } from "./auth/service";
-import { createTestDb } from "./testing/db";
+import { createTestDb, grant, THUNDER_ROLES } from "./testing/db";
 import { hashPin } from "./auth/crypto";
 import { addUser, deleteUser, denyRequest, resetLogin, updateUser } from "./user-admin";
 
@@ -25,20 +25,27 @@ describe("user admin", () => {
   });
   const now = new Date("2026-10-28T12:00:00Z");
   const deps = () => ({ pool: db.pool, now: () => now });
-  const user = async (id: string) => (await db.pool.query("select * from users where coach_id = $1", [id])).rows[0];
+  const user = async (id: string) =>
+    (
+      await db.pool.query(
+        `select *, ${THUNDER_ROLES}, has_role(coach_id, 'scenic-city', 'Coach') as scenic_city_coach from users where coach_id = $1`,
+        [id],
+      )
+    ).rows[0];
   const edit = { first: "Pat", last: "Test", email: "pat@example.com", active: true, coach: true, director: false };
 
   beforeEach(async () => {
     await db.reset();
     await db.pool.query(
-      `insert into users (coach_id, first_name, last_name, cell, email, verified_email, thunder_director, thunder_request, scenic_city_coach) values
-         ('9913694', 'Earl', 'Epps', '4239913694', null, null, true, false, false),
-         ('5550001', 'Pat', 'Test', '4235550001', 'pat@example.com', 'pat@example.com', false, true, false),
-         ('5550002', 'Sam', 'Scenic', '4235550002', null, null, false, false, true)`,
+      `insert into users (coach_id, first_name, last_name, cell, email, verified_email) values
+         ('9913694', 'Earl', 'Epps', '4239913694', null, null),
+         ('5550001', 'Pat', 'Test', '4235550001', 'pat@example.com', 'pat@example.com'),
+         ('5550002', 'Sam', 'Scenic', '4235550002', null, null)`,
     );
+    await grant(db.pool, "9913694 thunder Director", "5550001 thunder Request", "5550002 scenic-city Coach");
   });
 
-  it("edits name, email, Active and roles, records who did it, and leaves Scenic City columns alone", async () => {
+  it("edits name, email, Active and roles, records who did it, and leaves Scenic City roles alone", async () => {
     expect(await updateUser(deps(), director, "5550002", { first: "Samuel", last: "Scenic", email: "Sam@Example.com", active: false, coach: true, director: true })).toEqual({
       ok: true,
     });

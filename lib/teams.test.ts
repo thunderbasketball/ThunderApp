@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { SessionUser } from "./auth/service";
-import { createTestDb } from "./testing/db";
+import { createTestDb, grant } from "./testing/db";
 import { HEADER, row } from "./teamsnap/fixtures";
 import { importRegistrations } from "./teamsnap/import";
 import { parseRegistrations } from "./teamsnap/parse";
@@ -41,10 +41,11 @@ describe("teams", () => {
   beforeEach(async () => {
     await db.reset();
     await db.pool.query(
-      `insert into users (coach_id, first_name, last_name, cell, thunder_director) values
-         ('9913694', 'Earl', 'Epps', '4239913694', true),
-         ('5550001', 'Cal', 'Coach', '4235550001', false)`,
+      `insert into users (coach_id, first_name, last_name, cell) values
+         ('9913694', 'Earl', 'Epps', '4239913694'),
+         ('5550001', 'Cal', 'Coach', '4235550001')`,
     );
+    await grant(db.pool, "9913694 thunder Director");
     // Volunteer parents: Pat Test (Head Coach, cell 4235550000) and one with a bad cell.
     const csv = parseRegistrations(
       [HEADER, row({ rid: "1", coach: "Head Coach" }), row({ rid: "2", first: "Zed", coach: "Assistant Coach", cell: "423555" }), row({ rid: "3" })].join("\n"),
@@ -69,16 +70,17 @@ describe("teams", () => {
     expect(opts.volunteers.map((v) => v.value)).toEqual(["volunteer:1"]); // bad cell left out
     const r = await createTeam(deps(), director, { gender: "Boys", grades: ["1", "2"], level: "COMP", headCoach: "volunteer:1" });
     expect(r).toMatchObject({ ok: true, name: "2B Test" });
-    const u = await db.pool.query("select coach_id, first_name, cell, email, pin_hash, thunder_coach from users where cell = '4235550000'");
+    const u = await db.pool.query("select coach_id, first_name, cell, email, pin_hash, has_role(coach_id, 'thunder', 'Coach') as thunder_coach from users where cell = '4235550000'");
     expect(u.rows).toEqual([{ coach_id: "5550000", first_name: "Pat", cell: "4235550000", email: "pat@example.com", pin_hash: null, thunder_coach: true }]);
     // Now a user, so no longer offered as a volunteer.
     expect((await personOptions(deps(), director)).volunteers).toEqual([]);
   });
 
   it("gives an existing user the Coach role when they become a head coach", async () => {
-    await db.pool.query("update users set thunder_request = true where coach_id = '5550001'");
+    await grant(db.pool, "5550001 thunder Request");
     await createTeam(deps(), director, { gender: "Boys", grades: ["3"], level: "REC", headCoach: "user:5550001" });
-    const u = await db.pool.query("select thunder_coach, thunder_request from users where coach_id = '5550001'");
+    const u = await db.pool.query(`select has_role(coach_id, 'thunder', 'Coach') as thunder_coach, has_role(coach_id, 'thunder', 'Request') as thunder_request
+       from users where coach_id = '5550001'`);
     expect(u.rows[0]).toEqual({ thunder_coach: true, thunder_request: false });
   });
 

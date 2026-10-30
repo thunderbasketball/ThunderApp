@@ -1,10 +1,10 @@
 // Director tools for users: add, edit (name, email, Active, Coach, Director), approve/deny requests, reset login, delete.
-// Never writes the Scenic City columns.
+// Thunder roles live in org_roles (SPEC.md section 13).
 import type { Pool } from "pg";
 import type { SessionUser } from "./auth/service";
 import { cleanEmail, cleanName } from "./auth/validate";
 import { coachIdFromCell, normalizeCell } from "./phone";
-import { withTx } from "./sql";
+import { withTx, type Queryable } from "./sql";
 
 type Deps = { pool: Pool; now: () => Date };
 type Result<T = object> = ({ ok: true } & T) | { ok: false; message: string };
@@ -33,6 +33,17 @@ function cleanFields(input: { first: unknown; last: unknown; email: unknown }) {
   return { first, last, email };
 }
 
+// Sets Thunder Coach and Director. Granting either clears a pending request.
+async function setThunderRoles(q: Queryable, coachId: string, coach: boolean, director: boolean, who: string) {
+  await q.query("select set_role($1, 'thunder', 'Coach', $2, $4), set_role($1, 'thunder', 'Director', $3, $4)", [
+    coachId,
+    coach,
+    director,
+    who,
+  ]);
+  if (coach || director) await q.query("select set_role($1, 'thunder', 'Request', false, $2)", [coachId, who]);
+}
+
 export type EditUserInput = { first: unknown; last: unknown; email: unknown; active: unknown; coach: unknown; director: unknown };
 
 export async function updateUser(deps: Deps, viewer: SessionUser, coachId: string, input: EditUserInput): Promise<Result> {
@@ -46,14 +57,13 @@ export async function updateUser(deps: Deps, viewer: SessionUser, coachId: strin
     if (coachId === viewer.coachId && !director) throw new UserError("You can't remove your own Director role.");
     if (coachId === viewer.coachId && !active) throw new UserError("You can't deactivate yourself.");
     return withTx(deps.pool, async (q) => {
-      // Granting any Thunder role clears a pending request.
       const r = await q.query(
-        `update users set first_name = $2, last_name = $3, email = $4, active = $5, thunder_coach = $6, thunder_director = $7,
-                thunder_request = thunder_request and not ($6 or $7), updated_at = $8, updated_by = $9
+        `update users set first_name = $2, last_name = $3, email = $4, active = $5, updated_at = $6, updated_by = $7
          where coach_id = $1`,
-        [coachId, f.first, f.last, f.email, active, coach, director, deps.now(), by(viewer)],
+        [coachId, f.first, f.last, f.email, active, deps.now(), by(viewer)],
       );
       if (!r.rowCount) throw new UserError("That user no longer exists.");
+      await setThunderRoles(q, coachId, coach, director, by(viewer));
       return {};
     });
   });
@@ -63,11 +73,10 @@ export async function updateUser(deps: Deps, viewer: SessionUser, coachId: strin
 export async function denyRequest(deps: Deps, viewer: SessionUser, coachId: string): Promise<Result> {
   if (!viewer.isDirector) return directorOnly;
   if (!/^\d{7}$/.test(coachId)) return { ok: false, message: "That user no longer exists." };
-  await deps.pool.query("update users set thunder_request = false, updated_at = $2, updated_by = $3 where coach_id = $1", [
-    coachId,
-    deps.now(),
-    by(viewer),
-  ]);
+  await withTx(deps.pool, async (q) => {
+    const r = await q.query("update users set updated_at = $2, updated_by = $3 where coach_id = $1", [coachId, deps.now(), by(viewer)]);
+    if (r.rowCount) await q.query("select set_role($1, 'thunder', 'Request', false, $2)", [coachId, by(viewer)]);
+  });
   return { ok: true };
 }
 
@@ -89,10 +98,11 @@ export async function addUser(deps: Deps, viewer: SessionUser, input: AddUserInp
       if (e.rows[0]?.cell === cell) throw new UserError(`${e.rows[0].who} already has that cell number.`);
       if (e.rows[0]) throw new UserError(`That cell ends in the same 7 digits as ${e.rows[0].who}'s. Please contact support.`);
       await q.query(
-        `insert into users (coach_id, first_name, last_name, cell, email, thunder_coach, thunder_director, created_at, updated_at, updated_by)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $8, $9)`,
-        [coachId, f.first, f.last, cell, f.email, bool(input.coach), bool(input.director), deps.now(), by(viewer)],
+        `insert into users (coach_id, first_name, last_name, cell, email, created_at, updated_at, updated_by)
+         values ($1, $2, $3, $4, $5, $6, $6, $7)`,
+        [coachId, f.first, f.last, cell, f.email, deps.now(), by(viewer)],
       );
+      await setThunderRoles(q, coachId, bool(input.coach), bool(input.director), by(viewer));
       return { coachId };
     });
   });
@@ -134,8 +144,7 @@ export async function deleteUser(deps: Deps, viewer: SessionUser, coachId: strin
   return run(() =>
     withTx(deps.pool, async (q) => {
       const r = await q.query<{ scenic: boolean; teams: string[] }>(
-        `select (scenic_city_request or scenic_city_coach or scenic_city_director
-                 or coalesce(nullif(lower(scenic_city_associations), 'false'), '') <> '') as scenic,
+        `select exists (select 1 from org_roles o where o.coach_id = users.coach_id and o.org = 'scenic-city') as scenic,
                 array(select team_id::text from team_staff where coach_id = users.coach_id) as teams
          from users where coach_id = $1 for update`,
         [coachId],

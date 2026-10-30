@@ -1,7 +1,6 @@
 // Login rules (SPEC.md section 1). Every function re-checks everything on the server;
 // the browser only tells us which step the person is on.
 import type { Pool, PoolClient } from "pg";
-import { queuePin, sealPin } from "../masterauth/pin-box";
 import { withTx } from "../sql";
 import { coachIdFromCell, normalizeCell } from "../phone";
 import { STARTER_PIN, hashCode, hashPin, isStarterPin, newCode, newSessionToken, sha256, verifyPin } from "./crypto";
@@ -55,10 +54,11 @@ type UserRow = {
   cell: string;
   email: string | null;
   verified_email: string | null;
-  thunder_request: boolean;
   thunder_coach: boolean;
   thunder_director: boolean;
   on_team: boolean; // holds any team staff role (HeadCoach, AsstCoach, Manager, TeamParent)
+  any_role: boolean; // a role (not just a Request) in any organization
+  any_request: boolean; // a pending Request in any organization
 };
 
 export type SessionUser = {
@@ -104,12 +104,22 @@ function hasThunderRole(u: UserRow): boolean {
   return u.thunder_coach || u.thunder_director || u.on_team;
 }
 
-const ON_TEAM = "exists (select 1 from team_staff ts where ts.coach_id = u.coach_id) as on_team";
+// Roles (from org_roles) and team staff places, read fresh on every request.
+const ON_TEAM = `exists (select 1 from team_staff ts where ts.coach_id = u.coach_id) as on_team,
+  has_role(u.coach_id, 'thunder', 'Coach') as thunder_coach,
+  has_role(u.coach_id, 'thunder', 'Director') as thunder_director,
+  exists (select 1 from org_roles r where r.coach_id = u.coach_id and r.role <> 'Request') as any_role,
+  exists (select 1 from org_roles r where r.coach_id = u.coach_id and r.role = 'Request') as any_request`;
+
+// Asked for access somewhere and holds no role anywhere yet (a role in any organization, or a team place, lets them in).
+function pending(u: UserRow): boolean {
+  return u.any_request && !u.any_role && !u.on_team;
+}
 
 // Deactivated / still-pending people can't go any further.
 function gate(u: UserRow): Step | null {
   if (!u.active) return { step: "done", message: MSG.deactivated };
-  if (u.thunder_request && !hasThunderRole(u)) return { step: "done", message: MSG.pending };
+  if (pending(u)) return { step: "done", message: MSG.pending };
   return null;
 }
 
@@ -281,7 +291,7 @@ export async function setActingAs(
 ): Promise<{ ok: true } | { ok: false; message: string }> {
   if (!token) return { ok: false, message: "Please log in again." };
   const s = await deps.pool.query<{ coach_id: string; director: boolean }>(
-    `select s.coach_id, u.thunder_director and u.active as director from sessions s join users u on u.coach_id = s.coach_id
+    `select s.coach_id, has_role(u.coach_id, 'thunder', 'Director') and u.active as director from sessions s join users u on u.coach_id = s.coach_id
      where s.token_hash = $1 and s.expires_at > $2`,
     [sha256(token), deps.now()],
   );
@@ -306,7 +316,7 @@ function toSessionUser(u: UserRow): SessionUser {
     lastName: u.last_name,
     isDirector: u.thunder_director,
     isCoach: u.thunder_coach,
-    requestPending: u.thunder_request && !hasThunderRole(u),
+    requestPending: pending(u),
     hasThunderRole: hasThunderRole(u),
   };
 }
@@ -374,7 +384,6 @@ export async function completeStarter(deps: Deps, cellInput: unknown, code: unkn
       c.row.email,
       deps.now(),
     ]);
-    await queuePin(q, user.coach_id, sealPin(pin1 as string));
     await q.query("delete from pin_lockouts where cell = $1", [cell]);
     return startSession(deps, q, user.coach_id);
   });
@@ -481,16 +490,18 @@ export async function completeReset(deps: Deps, cellInput: unknown, code: unknow
     const c = await checkCode(deps, q, cell, "reset", code);
     if (!c.ok) return c.step;
     await q.query("update users set pin_hash = $2, updated_at = $3 where coach_id = $1", [user.coach_id, pinHash, deps.now()]);
-    await queuePin(q, user.coach_id, sealPin(pin1 as string));
     await q.query("delete from pin_lockouts where cell = $1", [cell]);
     return startSession(deps, q, user.coach_id);
   });
 }
 
+// Organizations with a join link (SPEC.md section 13). Signing up there skips the Thunder request.
+const JOIN_ORGS = ["scenic-city"];
+
 // Create Account: check everything, then email a code. Nothing is saved until the code checks out.
 export async function startSignup(
   deps: Deps,
-  input: { cell: unknown; firstName: unknown; lastName: unknown; email: unknown; pin1: unknown; pin2: unknown },
+  input: { cell: unknown; firstName: unknown; lastName: unknown; email: unknown; pin1: unknown; pin2: unknown; join?: unknown },
 ): Promise<Step> {
   const cell = typeof input.cell === "string" ? normalizeCell(input.cell) : null;
   if (!cell) return err(MSG.badPhone);
@@ -501,14 +512,13 @@ export async function startSignup(
   if (!email) return err(MSG.badEmail);
   const pinError = newPinError(input.pin1, input.pin2);
   if (pinError) return err(pinError);
+  const join = JOIN_ORGS.includes(input.join as string) ? (input.join as string) : null;
   const pinHash = await hashPin(input.pin1 as string);
   return withTx(deps.pool, async (q) => {
     await lockCell(q, cell);
     const clash = await q.query("select 1 from users where cell = $1 or coach_id = $2", [cell, coachIdFromCell(cell)]);
     if (clash.rows.length) return err(MSG.taken);
-    // The PIN itself only travels encrypted, for the MasterAuth sheet (null when that sync is off).
-    const pinSealed = sealPin(input.pin1 as string);
-    const fail = await issueCode(deps, q, cell, "signup", email, { firstName, lastName, pinHash, pinSealed });
+    const fail = await issueCode(deps, q, cell, "signup", email, { firstName, lastName, pinHash, join });
     return fail ?? { step: "signupCode", maskedEmail: maskEmail(email) };
   });
 }
@@ -520,27 +530,23 @@ export async function completeSignup(deps: Deps, cellInput: unknown, code: unkno
     await lockCell(q, cell);
     const c = await checkCode(deps, q, cell, "signup", code);
     if (!c.ok) return c.step;
-    const { firstName, lastName, pinHash, pinSealed } = c.row.payload as {
-      firstName: string;
-      lastName: string;
-      pinHash: string;
-      pinSealed?: string | null;
-    };
+    const { firstName, lastName, pinHash, join } = c.row.payload as { firstName: string; lastName: string; pinHash: string; join?: string | null };
     const now = deps.now();
     const ins = await q.query(
-      `insert into users (coach_id, first_name, last_name, active, pin_hash, cell, email, verified_email,
-                          thunder_request, created_at, updated_at)
-       values ($1, $2, $3, true, $4, $5, $6, $6, true, $7, $7)
+      `insert into users (coach_id, first_name, last_name, active, pin_hash, cell, email, verified_email, created_at, updated_at)
+       values ($1, $2, $3, true, $4, $5, $6, $6, $7, $7)
        on conflict do nothing`,
       [coachIdFromCell(cell), firstName, lastName, pinHash, cell, c.row.email, now],
     );
     if (!ins.rowCount) return err(MSG.taken);
-    await queuePin(q, coachIdFromCell(cell), pinSealed ?? null);
+    // From a join link: logged straight in (no role yet) to choose what they're joining as on that page.
+    if (join) return startSession(deps, q, coachIdFromCell(cell));
     if (deps.devStarterBypass) {
       // Testing mode: new accounts are approved Directors and logged straight in.
-      await q.query("update users set thunder_director = true, thunder_request = false where cell = $1", [cell]);
+      await q.query("select set_role($1, 'thunder', 'Director', true, 'testing mode')", [coachIdFromCell(cell)]);
       return startSession(deps, q, coachIdFromCell(cell));
     }
+    await q.query("select set_role($1, 'thunder', 'Request', true, null)", [coachIdFromCell(cell)]);
     return { step: "done", message: MSG.requested };
   });
 }
@@ -562,7 +568,7 @@ export async function requestAccess(deps: Deps, token: string | undefined): Prom
   const user = await getSessionUser(deps, token);
   if (!user) return err("Please log in again.");
   if (!user.hasThunderRole) {
-    await deps.pool.query("update users set thunder_request = true, updated_at = $2 where coach_id = $1", [user.coachId, deps.now()]);
+    await deps.pool.query("select set_role($1, 'thunder', 'Request', true, null)", [user.coachId]);
   }
   return { step: "done", message: MSG.requested };
 }

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { SessionUser } from "./auth/service";
 import { chatUnreadCount, dmKey, getChat, listChats, markChatRead, newChatOptions, postMessage, sendUnreadChatEmails } from "./chat";
-import { createTestDb } from "./testing/db";
+import { createTestDb, grant } from "./testing/db";
 
 const person = (coachId: string, firstName: string, isDirector = false): SessionUser => ({
   coachId,
@@ -36,13 +36,14 @@ describe("chat", () => {
     await db.reset();
     now = new Date("2026-10-28T12:00:00Z");
     await db.pool.query(
-      `insert into users (coach_id, first_name, last_name, cell, email, thunder_director, thunder_coach) values
-         ('9913694', 'Dee', 'X', '4239913694', 'dee@example.com', true, false),
-         ('5550001', 'Cal', 'X', '4235550001', 'cal@example.com', false, true),
-         ('5550002', 'Ace', 'X', '4235550002', 'ace@example.com', false, false),
-         ('5550003', 'Pam', 'X', '4235550003', 'pam@example.com', false, false),
-         ('5550004', 'Max', 'X', '4235550004', null, false, false)`,
+      `insert into users (coach_id, first_name, last_name, cell, email) values
+         ('9913694', 'Dee', 'X', '4239913694', 'dee@example.com'),
+         ('5550001', 'Cal', 'X', '4235550001', 'cal@example.com'),
+         ('5550002', 'Ace', 'X', '4235550002', 'ace@example.com'),
+         ('5550003', 'Pam', 'X', '4235550003', 'pam@example.com'),
+         ('5550004', 'Max', 'X', '4235550004', null)`,
     );
+    await grant(db.pool, "9913694 thunder Director", "5550001 thunder Coach");
     const t = await db.pool.query<{ id: string }>(
       `insert into teams (name, gender, grades, grade_sort, level, created_by) values ('4G A', 'Girls', '{4}', 4, 'REC', 'x'), ('5B B', 'Boys', '{5}', 5, 'REC', 'x') returning id::text`,
     );
@@ -111,8 +112,9 @@ describe("chat", () => {
 
   it("chats a Director starts: only its people get alerts, other Directors can still read", async () => {
     await db.pool.query(
-      "insert into users (coach_id, first_name, last_name, cell, thunder_director) values ('9900002', 'Dot', 'X', '4239900002', true)",
+      "insert into users (coach_id, first_name, last_name, cell) values ('9900002', 'Dot', 'X', '4239900002')",
     );
+    await grant(db.pool, "9900002 thunder Director");
     const dot = person("9900002", "Dot", true);
     const dm = dmKey(dir.coachId, cal.coachId);
     expect(dm).toBe(dmKey(cal.coachId, dir.coachId));

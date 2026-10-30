@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { SessionUser } from "./auth/service";
-import { createTestDb } from "./testing/db";
+import { createTestDb, grant } from "./testing/db";
 import {
   deleteAnnouncement,
   listInbox,
@@ -45,14 +45,23 @@ describe("announcements", () => {
     await db.reset();
     now = new Date("2026-10-28T12:00:00Z");
     await db.pool.query(
-      `insert into users (coach_id, first_name, last_name, cell, email, active, thunder_coach, thunder_director, thunder_request) values
-         ('9913694', 'Earl', 'X', '4239913694', 'earl@example.com', true, false, true, false),
-         ('5550001', 'Hank', 'X', '4235550001', 'hank@example.com', true, true, false, false),
-         ('5550002', 'Amy', 'X', '4235550002', 'amy@example.com', true, true, false, false),
-         ('5550003', 'Cole', 'X', '4235550003', null, true, true, false, false),
-         ('5550004', 'Paula', 'X', '4235550004', 'paula@example.com', true, false, false, false),
-         ('5550005', 'Ina', 'X', '4235550005', 'ina@example.com', false, true, false, false),
-         ('5550006', 'Rex', 'X', '4235550006', 'rex@example.com', true, false, false, true)`,
+      `insert into users (coach_id, first_name, last_name, cell, email, active) values
+         ('9913694', 'Earl', 'X', '4239913694', 'earl@example.com', true),
+         ('5550001', 'Hank', 'X', '4235550001', 'hank@example.com', true),
+         ('5550002', 'Amy', 'X', '4235550002', 'amy@example.com', true),
+         ('5550003', 'Cole', 'X', '4235550003', null, true),
+         ('5550004', 'Paula', 'X', '4235550004', 'paula@example.com', true),
+         ('5550005', 'Ina', 'X', '4235550005', 'ina@example.com', false),
+         ('5550006', 'Rex', 'X', '4235550006', 'rex@example.com', true)`,
+    );
+    await grant(
+      db.pool,
+      "9913694 thunder Director",
+      "5550001 thunder Coach",
+      "5550002 thunder Coach",
+      "5550003 thunder Coach",
+      "5550005 thunder Coach",
+      "5550006 thunder Request",
     );
     const t = await db.pool.query<{ id: string }>(
       `insert into teams (name, gender, grades, grade_sort, level, created_by) values ('4G A', 'Girls', '{4}', 4, 'REC', 'x'), ('5B B', 'Boys', '{5}', 5, 'COMP', 'x') returning id::text`,

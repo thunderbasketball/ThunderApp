@@ -76,7 +76,7 @@ async function Events({ searchParams }: { searchParams: PageProps<"/events">["se
 
   return (
     <>
-      <AppHeader user={user} tab="events" context={user.isDirector ? "director" : active?.key} />
+      <AppHeader user={user} tab="events" context={user.isDirector ? "director" : active?.org === "thunder" ? active.key : undefined} />
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6">
         <div className="flex items-start justify-between gap-3">
           <PageTitle

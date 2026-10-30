@@ -23,7 +23,7 @@ try {
   if (cmd === "list") {
     const r = await client.query(
       `select coach_id, first_name, last_name, cell, email, verified_email, active,
-              thunder_request as request, thunder_coach as coach, thunder_director as director
+              array(select org || ':' || role from org_roles o where o.coach_id = users.coach_id order by 1) as roles
        from users order by last_name, first_name`,
     );
     console.table(r.rows);
@@ -32,13 +32,15 @@ try {
     if (!first || !last) throw new Error("Usage: add <cell> <first> <last> [email]");
     const cell = cellArg(cellIn);
     await client.query(
-      `insert into users (coach_id, first_name, last_name, cell, email, thunder_coach) values ($1, $2, $3, $4, $5, true)`,
+      `insert into users (coach_id, first_name, last_name, cell, email) values ($1, $2, $3, $4, $5)`,
       [cell.slice(-7), first, last, cell, email?.toLowerCase() ?? null],
     );
+    await client.query("select set_role($1, 'thunder', 'Coach', true, 'npm run user')", [cell.slice(-7)]);
     console.log(`Added ${first} ${last} with starter PIN 1234.`);
   } else if (cmd === "director") {
     const r = await client.query(
-      "update users set thunder_director = true, thunder_request = false, updated_at = now() where cell = $1",
+      `select set_role(coach_id, 'thunder', 'Director', true, 'npm run user'), set_role(coach_id, 'thunder', 'Request', false, 'npm run user')
+       from users where cell = $1`,
       [cellArg(args[0])],
     );
     console.log(r.rowCount ? "Director role granted." : "No user with that number.");

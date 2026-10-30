@@ -9,14 +9,18 @@ export async function GET(req: NextRequest) {
   if (!devBypass) return new NextResponse("Not found", { status: 404 });
 
   let r = await db.query<{ coach_id: string }>(
-    "select coach_id from users where thunder_director and active order by created_at limit 1",
+    "select coach_id from users where has_role(coach_id, 'thunder', 'Director') and active order by created_at limit 1",
   );
   if (!r.rows.length) {
     r = await db.query<{ coach_id: string }>(
-      `insert into users (coach_id, first_name, last_name, cell, thunder_director, thunder_coach)
-       values ('0000001', 'Test', 'Director', '9990000001', true, true)
-       on conflict (coach_id) do update set thunder_director = true, active = true
+      `insert into users (coach_id, first_name, last_name, cell)
+       values ('0000001', 'Test', 'Director', '9990000001')
+       on conflict (coach_id) do update set active = true
        returning coach_id`,
+    );
+    await db.query(
+      "select set_role($1, 'thunder', 'Director', true, 'testing mode'), set_role($1, 'thunder', 'Coach', true, 'testing mode')",
+      [r.rows[0].coach_id],
     );
   }
   const s = await startSession(deps, db, r.rows[0].coach_id);

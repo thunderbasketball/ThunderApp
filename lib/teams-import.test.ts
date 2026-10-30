@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { createTestDb } from "./testing/db";
+import { createTestDb, grant } from "./testing/db";
 import { HEADER, row } from "./teamsnap/fixtures";
 import { importRegistrations } from "./teamsnap/import";
 import { parseRegistrations } from "./teamsnap/parse";
@@ -65,8 +65,9 @@ describe("importTeams", () => {
   beforeEach(async () => {
     await db.reset();
     await db.pool.query(
-      "insert into users (coach_id, first_name, last_name, cell, thunder_director) values ('9913694', 'Earl', 'Epps', '4239913694', true)",
+      "insert into users (coach_id, first_name, last_name, cell) values ('9913694', 'Earl', 'Epps', '4239913694')",
     );
+    await grant(db.pool, "9913694 thunder Director");
     // Parent 1 Pat Test, cell 4235550000 -> CoachID 5550000.
     const csv = parseRegistrations([HEADER, row({ rid: "1" })].join("\n"), { schoolYear: 2026 });
     await importRegistrations(db.pool, csv, "Earl Epps", now);
@@ -89,7 +90,7 @@ describe("importTeams", () => {
       { name: "4G Epps", coach_id: "5550000", role: "AsstCoach" },
       { name: "4G Epps", coach_id: "9913694", role: "HeadCoach" },
     ]);
-    const u = await db.pool.query("select first_name, cell, email, pin_hash, thunder_coach from users where coach_id = '5550000'");
+    const u = await db.pool.query(`select first_name, cell, email, pin_hash, has_role(coach_id, 'thunder', 'Coach') as thunder_coach from users where coach_id = '5550000'`);
     expect(u.rows[0]).toEqual({ first_name: "Pat", cell: "4235550000", email: "pat@example.com", pin_hash: null, thunder_coach: true });
     const t = await db.pool.query("select practice_locations, created_by from teams where name = '4G Epps'");
     expect(t.rows[0]).toEqual({ practice_locations: ["Action Church"], created_by: "Earl Epps" });

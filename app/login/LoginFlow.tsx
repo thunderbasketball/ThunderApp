@@ -12,7 +12,9 @@ const primary =
   "w-full rounded-xl bg-thunder-blue px-4 py-3 text-lg font-semibold text-white shadow-sm hover:bg-thunder-blue-dark disabled:opacity-50";
 const link = "text-blue-700 underline-offset-2 hover:underline disabled:opacity-50 dark:text-blue-400";
 
-export default function LoginFlow() {
+// `join`: on an organization's join link, Create Account signs the person in to finish joining there.
+// `next`: where to go once logged in (default: home).
+export default function LoginFlow({ join, next = "/" }: { join?: string; next?: string } = {}) {
   const [screen, setScreen] = useState<Screen>({ step: "phone" });
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -35,7 +37,7 @@ export default function LoginFlow() {
     startTransition(async () => {
       const s = await call();
       if (s.step === "loggedIn") {
-        window.location.replace("/");
+        window.location.replace(next);
         return;
       }
       if (s.step === "error") {
@@ -154,7 +156,7 @@ export default function LoginFlow() {
           title="Create account"
           intro="We don't have that number yet. Fill this in and we'll email you a code."
           onSubmit={() =>
-            go(() => act.startSignup({ cell, firstName: first, lastName: last, email, pin1, pin2 }))
+            go(() => act.startSignup({ cell, firstName: first, lastName: last, email, pin1, pin2, join }))
           }
         >
           <Field label="First name">
@@ -186,7 +188,7 @@ export default function LoginFlow() {
         >
           {codeField}
           <Submit busy={busy}>Create account</Submit>
-          {resend(() => act.startSignup({ cell, firstName: first, lastName: last, email, pin1, pin2 }))}
+          {resend(() => act.startSignup({ cell, firstName: first, lastName: last, email, pin1, pin2, join }))}
         </Form>
       );
       break;
@@ -291,7 +293,7 @@ export default function LoginFlow() {
       break;
 
     case "done":
-      body = <Panel title="Thunder Basketball" intro={screen.message} />;
+      body = <Panel title="CourtCaptain" intro={screen.message} />;
       break;
   }
 

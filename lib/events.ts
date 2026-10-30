@@ -262,7 +262,7 @@ export async function staffChoices(deps: Deps, viewer: SessionUser): Promise<{ i
   if (!viewer.isDirector) return [];
   const r = await deps.pool.query<{ id: string; name: string }>(
     `select u.coach_id as id, u.first_name || ' ' || u.last_name as name from users u
-     where u.active and (u.thunder_coach or u.thunder_director or exists (select 1 from team_staff s where s.coach_id = u.coach_id))
+     where u.active and (has_role(u.coach_id, 'thunder', 'Coach') or has_role(u.coach_id, 'thunder', 'Director') or exists (select 1 from team_staff s where s.coach_id = u.coach_id))
      order by lower(u.last_name), lower(u.first_name)`,
   );
   return r.rows;

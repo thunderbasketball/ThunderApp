@@ -152,11 +152,7 @@ async function findOrCreateUser(
   await q.query("select pg_advisory_xact_lock(hashtext('user:' || $1))", [coachId]);
   const u = await q.query<{ who: string }>("select first_name || ' ' || last_name as who from users where coach_id = $1", [coachId]);
   if (u.rows[0]) {
-    if (isCoach)
-      await q.query(
-        "update users set thunder_coach = true, thunder_request = false, updated_at = $2 where coach_id = $1 and not thunder_coach",
-        [coachId, now],
-      );
+    if (isCoach) await q.query("select set_role($1, 'thunder', 'Coach', true, null), set_role($1, 'thunder', 'Request', false, null)", [coachId]);
     return { status: "user", who: u.rows[0].who };
   }
   const p = await q.query<{ first: string; last: string; cell: string; email: string | null }>(
@@ -174,9 +170,10 @@ async function findOrCreateUser(
   const v = p.rows[0];
   if (!v) return null;
   await q.query(
-    `insert into users (coach_id, first_name, last_name, cell, email, thunder_coach, created_at, updated_at)
-     values ($1, $2, $3, $4, $5, $6, $7, $7)`,
-    [coachId, v.first, v.last, v.cell, v.email?.toLowerCase() ?? null, isCoach, now],
+    `insert into users (coach_id, first_name, last_name, cell, email, created_at, updated_at)
+     values ($1, $2, $3, $4, $5, $6, $6)`,
+    [coachId, v.first, v.last, v.cell, v.email?.toLowerCase() ?? null, now],
   );
+  if (isCoach) await q.query("select set_role($1, 'thunder', 'Coach', true, null), set_role($1, 'thunder', 'Request', false, null)", [coachId]);
   return { status: "newLogin", who: `${v.first} ${v.last}` };
 }

@@ -35,7 +35,7 @@ const pool = new pg.Pool({
 });
 try {
   const d = await pool.query<{ name: string }>(
-    "select first_name || ' ' || last_name as name from users where thunder_director and active order by created_at limit 1",
+    "select first_name || ' ' || last_name as name from users where has_role(coach_id, 'thunder', 'Director') and active order by created_at limit 1",
   );
   const by = d.rows[0]?.name ?? "Director";
   const result = await importTeams(pool, parsed, { by, now: new Date(), dryRun });

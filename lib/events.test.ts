@@ -14,7 +14,7 @@ import {
   removeEventType,
   setStatus,
 } from "./events";
-import { createTestDb } from "./testing/db";
+import { createTestDb, grant } from "./testing/db";
 
 const person = (coachId: string, firstName: string, isDirector = false): SessionUser => ({
   coachId,
@@ -58,12 +58,13 @@ describe("events", () => {
   beforeEach(async () => {
     await db.reset();
     await db.pool.query(
-      `insert into users (coach_id, first_name, last_name, cell, active, thunder_coach, thunder_director) values
-         ('9913694', 'Earl', 'X', '4239913694', true, false, true),
-         ('5550001', 'Hank', 'X', '4235550001', true, true, false),
-         ('5550002', 'Amy', 'X', '4235550002', true, true, false),
-         ('5550003', 'Ina', 'X', '4235550003', false, true, false)`,
+      `insert into users (coach_id, first_name, last_name, cell, active) values
+         ('9913694', 'Earl', 'X', '4239913694', true),
+         ('5550001', 'Hank', 'X', '4235550001', true),
+         ('5550002', 'Amy', 'X', '4235550002', true),
+         ('5550003', 'Ina', 'X', '4235550003', false)`,
     );
+    await grant(db.pool, "9913694 thunder Director", "5550001 thunder Coach", "5550002 thunder Coach", "5550003 thunder Coach");
     await db.pool.query(
       "insert into event_types (name, created_by, created_at) values ('Open Gym', 'x', '2026-01-01'), ('Tryouts', 'x', '2026-01-02')",
     );

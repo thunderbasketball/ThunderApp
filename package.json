@@ -13,7 +13,6 @@
     "user": "node --env-file=.env.local scripts/user.ts",
     "import:teamsnap": "tsx --env-file=.env.local scripts/import-teamsnap.ts",
     "import:teams": "tsx --env-file=.env.local scripts/import-teams.ts",
-    "import:users": "tsx --env-file=.env.local scripts/import-users.ts",
     "import:practice": "tsx --env-file=.env.local scripts/import-practice.ts",
     "import:evaluations": "tsx --env-file=.env.local scripts/import-evaluations.ts",
     "email:test": "tsx --conditions=react-server --env-file=.env.local scripts/test-email.ts"

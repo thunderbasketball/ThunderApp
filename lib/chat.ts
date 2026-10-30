@@ -35,7 +35,7 @@ type Ctx = {
 // Roles fresh from the database (for the viewer, or anyone when working out who gets an email).
 async function contextFor(q: Q, coachId: string): Promise<Ctx | null> {
   const u = await q.query<{ director: boolean; coach: boolean }>(
-    "select thunder_director as director, thunder_coach as coach from users where coach_id = $1 and active",
+    "select has_role(coach_id, 'thunder', 'Director') as director, has_role(coach_id, 'thunder', 'Coach') as coach from users where coach_id = $1 and active",
     [coachId],
   );
   if (!u.rows[0]) return null;
@@ -173,11 +173,11 @@ async function titleOf(q: Q, ctx: Ctx, k: Key): Promise<string | null> {
 // Chats started by one person must have been started by a Director (with a real coach, for a private chat).
 async function startable(q: Q, k: Key): Promise<boolean> {
   const isDirector = async (id: string) =>
-    !!(await q.query("select 1 from users where coach_id = $1 and active and thunder_director", [id])).rows[0];
+    !!(await q.query("select 1 from users where coach_id = $1 and active and has_role(coach_id, 'thunder', 'Director')", [id])).rows[0];
   switch (k.kind) {
     case "dm": {
       const r = await q.query<{ director: boolean }>(
-        `select u.thunder_director as director from users u where u.coach_id in ($1, $2) and u.active and (u.thunder_director or ${IS_COACH})`,
+        `select has_role(u.coach_id, 'thunder', 'Director') as director from users u where u.coach_id in ($1, $2) and u.active and (has_role(u.coach_id, 'thunder', 'Director') or ${IS_COACH})`,
         [k.a, k.b],
       );
       return r.rows.length === 2 && r.rows.some((x) => x.director);
@@ -206,7 +206,7 @@ export async function newChatOptions(deps: Deps, viewer: SessionUser): Promise<C
     out.push({ key: `heads-${ctx.coachId}`, title: "All Head Coaches (you + them)", group: "Groups" });
     const coaches = await deps.pool.query<{ id: string; name: string }>(
       `select u.coach_id as id, u.first_name || ' ' || u.last_name as name from users u
-       where u.active and u.coach_id <> $1 and (u.thunder_coach or exists (select 1 from team_staff s where s.coach_id = u.coach_id and s.role in ('HeadCoach', 'AsstCoach')))
+       where u.active and u.coach_id <> $1 and (has_role(u.coach_id, 'thunder', 'Coach') or exists (select 1 from team_staff s where s.coach_id = u.coach_id and s.role in ('HeadCoach', 'AsstCoach')))
        order by lower(u.last_name), lower(u.first_name)`,
       [ctx.coachId],
     );
@@ -294,17 +294,17 @@ export type ChatMessage = { id: string; senderId: string; sender: string; body: 
 export type ChatThread = { key: string; title: string; members: string[]; messages: ChatMessage[] };
 
 const MEMBERS: Record<Exclude<Key["kind"], "dm" | "staff" | "heads">, string> = {
-  directors: "u.thunder_director",
-  everyone: "u.thunder_director or {coach}",
+  directors: "has_role(u.coach_id, 'thunder', 'Director')",
+  everyone: "has_role(u.coach_id, 'thunder', 'Director') or {coach}",
   coaches: "{coach}",
-  team: "u.thunder_director or exists (select 1 from team_staff s where s.coach_id = u.coach_id and s.team_id = $1)",
+  team: "has_role(u.coach_id, 'thunder', 'Director') or exists (select 1 from team_staff s where s.coach_id = u.coach_id and s.team_id = $1)",
   teamcoaches:
-    "u.thunder_director or exists (select 1 from team_staff s where s.coach_id = u.coach_id and s.team_id = $1 and s.role in ('HeadCoach', 'AsstCoach'))",
-  coach: "u.thunder_director or u.coach_id = $1",
-  event: "u.thunder_director or exists (select 1 from event_staff s where s.coach_id = u.coach_id and s.event_id = $1)",
+    "has_role(u.coach_id, 'thunder', 'Director') or exists (select 1 from team_staff s where s.coach_id = u.coach_id and s.team_id = $1 and s.role in ('HeadCoach', 'AsstCoach'))",
+  coach: "has_role(u.coach_id, 'thunder', 'Director') or u.coach_id = $1",
+  event: "has_role(u.coach_id, 'thunder', 'Director') or exists (select 1 from event_staff s where s.coach_id = u.coach_id and s.event_id = $1)",
 };
 const IS_COACH =
-  "(u.thunder_coach or exists (select 1 from team_staff s where s.coach_id = u.coach_id and s.role in ('HeadCoach', 'AsstCoach')))";
+  "(has_role(u.coach_id, 'thunder', 'Coach') or exists (select 1 from team_staff s where s.coach_id = u.coach_id and s.role in ('HeadCoach', 'AsstCoach')))";
 
 function membersWhere(k: Key): [string, string[]] {
   switch (k.kind) {

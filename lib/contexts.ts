@@ -1,12 +1,14 @@
-// The roles a person can switch between: Director, plus one per team they're on.
+// The roles a person can switch between: Thunder Director, one per Thunder team they're on, and Scenic City.
 // Read from the database on every request, so a removed role disappears at once.
 import type { Pool } from "pg";
 import type { SessionUser } from "./auth/service";
+import { SCENIC_ROLES, type OrgSlug, type ScenicRole } from "./orgs";
 import type { Role } from "./teams";
 
 export type RoleContext =
-  | { key: "director"; label: string; href: string }
-  | { key: `team:${string}`; label: string; href: string; teamId: string; teamName: string; role: Role };
+  | { key: "director"; org: OrgSlug; label: string; href: string }
+  | { key: `team:${string}`; org: OrgSlug; label: string; href: string; teamId: string; teamName: string; role: Role }
+  | { key: "scenic"; org: OrgSlug; label: string; href: string; role: ScenicRole };
 
 export const CONTEXT_COOKIE = "thunder_context";
 
@@ -14,7 +16,7 @@ const ROLE_LABEL: Record<Role, string> = { HeadCoach: "Head Coach", AsstCoach: "
 
 export async function userContexts(pool: Pick<Pool, "query">, viewer: SessionUser): Promise<RoleContext[]> {
   const out: RoleContext[] = [];
-  if (viewer.isDirector) out.push({ key: "director", label: "Director", href: "/teams" });
+  if (viewer.isDirector) out.push({ key: "director", org: "thunder", label: "Director", href: "/teams" });
   // One chip per team, showing the person's highest role there.
   const r = await pool.query<{ id: string; name: string; role: Role }>(
     `select distinct on (t.id) t.id::text, t.name, s.role
@@ -25,7 +27,22 @@ export async function userContexts(pool: Pick<Pool, "query">, viewer: SessionUse
   );
   const teams = r.rows.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
   for (const t of teams)
-    out.push({ key: `team:${t.id}`, label: `${t.name} · ${ROLE_LABEL[t.role]}`, href: `/teams/${t.id}`, teamId: t.id, teamName: t.name, role: t.role });
+    out.push({
+      key: `team:${t.id}`,
+      org: "thunder",
+      label: `${t.name} · ${ROLE_LABEL[t.role]}`,
+      href: `/teams/${t.id}`,
+      teamId: t.id,
+      teamName: t.name,
+      role: t.role,
+    });
+  // One Scenic City chip, showing the person's highest role there.
+  const sc = await pool.query<{ role: ScenicRole }>(
+    `select role from org_roles where coach_id = $1 and org = 'scenic-city' and role = any($2::text[])
+     order by array_position($2::text[], role) limit 1`,
+    [viewer.coachId, SCENIC_ROLES],
+  );
+  if (sc.rows[0]) out.push({ key: "scenic", org: "scenic-city", label: sc.rows[0].role, href: "/scenic", role: sc.rows[0].role });
   return out;
 }
 

@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { createTestDb, testClock, testMailer } from "../testing/db";
+import { createTestDb, grant, testClock, testMailer, THUNDER_ROLES } from "../testing/db";
 import { hashPin } from "./crypto";
 import * as auth from "./service";
 import { MSG, type Deps, type Step } from "./service";
@@ -37,25 +37,18 @@ async function addUser(o: {
   const cell = o.cell ?? CELL;
   const email = o.email === undefined ? "earl@example.com" : o.email;
   await db.pool.query(
-    `insert into users (coach_id, first_name, last_name, active, pin_hash, cell, email, verified_email,
-                        thunder_request, thunder_coach, thunder_director)
-     values ($1, 'Earl', 'Epps', $2, $3, $4, $5, $6, $7, $8, $9)`,
-    [
-      cell.slice(-7),
-      o.active ?? true,
-      o.pin === null ? null : await hashPin(o.pin ?? "5678"),
-      cell,
-      email,
-      o.verified === false ? null : email,
-      o.request ?? false,
-      o.coach ?? true,
-      o.director ?? false,
-    ],
+    `insert into users (coach_id, first_name, last_name, active, pin_hash, cell, email, verified_email)
+     values ($1, 'Earl', 'Epps', $2, $3, $4, $5, $6)`,
+    [cell.slice(-7), o.active ?? true, o.pin === null ? null : await hashPin(o.pin ?? "5678"), cell, email, o.verified === false ? null : email],
   );
+  const id = cell.slice(-7);
+  if (o.request) await grant(db.pool, `${id} thunder Request`);
+  if (o.coach ?? true) await grant(db.pool, `${id} thunder Coach`);
+  if (o.director) await grant(db.pool, `${id} thunder Director`);
 }
 
 async function userRow(cell = CELL) {
-  return (await db.pool.query("select * from users where cell = $1", [cell])).rows[0];
+  return (await db.pool.query(`select *, ${THUNDER_ROLES} from users where cell = $1`, [cell])).rows[0];
 }
 
 function expectError(s: Step, message?: string | RegExp) {
@@ -490,6 +483,37 @@ describe("team staff", () => {
   });
 });
 
+describe("Scenic City roles", () => {
+  it("Create Account from the join link logs straight in, with no Thunder request", async () => {
+    await auth.startSignup(deps, { cell: CELL, firstName: "Earl", lastName: "Epps", email: "e@example.com", pin1: "1357", pin2: "1357", join: "scenic-city" });
+    const t = token(await auth.completeSignup(deps, CELL, mail.lastCode()));
+    expect(await auth.getSessionUser(deps, t)).toMatchObject({ coachId: "5551234", hasThunderRole: false, requestPending: false });
+    expect((await db.pool.query("select count(*)::int n from org_roles")).rows[0].n).toBe(0);
+  });
+
+  it("an unknown join value is ignored (normal Thunder request)", async () => {
+    await auth.startSignup(deps, { cell: CELL, firstName: "Earl", lastName: "Epps", email: "e@example.com", pin1: "1357", pin2: "1357", join: "nope" });
+    expect(await auth.completeSignup(deps, CELL, mail.lastCode())).toEqual({ step: "done", message: MSG.requested });
+    expect(await userRow()).toMatchObject({ thunder_request: true });
+  });
+
+  it("a Scenic City role alone lets a person log in; a Request alone is pending", async () => {
+    await addUser({ coach: false });
+    await grant(db.pool, "5551234 scenic-city Request");
+    expect(await auth.lookupPhone(deps, CELL)).toEqual({ step: "done", message: MSG.pending });
+    await grant(db.pool, "5551234 scenic-city Partner");
+    expect(await auth.lookupPhone(deps, CELL)).toEqual({ step: "pin" });
+    const t = token(await auth.submitPin(deps, CELL, "5678"));
+    expect(await auth.getSessionUser(deps, t)).toMatchObject({ hasThunderRole: false, requestPending: false, isDirector: false });
+  });
+
+  it("a pending Thunder request doesn't block someone who holds a Scenic City role", async () => {
+    await addUser({ coach: false, request: true });
+    await grant(db.pool, "5551234 scenic-city Director");
+    expect(await auth.lookupPhone(deps, CELL)).toEqual({ step: "pin" });
+  });
+});
+
 describe("sessions", () => {
   it("last 24 hours from the PIN login, then the PIN is needed again", async () => {
     await addUser({});
@@ -503,7 +527,7 @@ describe("sessions", () => {
   it("roles are re-read on every request", async () => {
     await addUser({ director: true });
     const t = token(await auth.submitPin(deps, CELL, "5678"));
-    await db.pool.query("update users set thunder_director = false");
+    await db.pool.query("delete from org_roles where role = 'Director'");
     expect(await auth.getSessionUser(deps, t)).toMatchObject({ isDirector: false });
   });
 
@@ -526,10 +550,10 @@ describe("sessions", () => {
     });
 
     // Losing the Director role ends it at once; getting it back resumes.
-    await db.pool.query("update users set thunder_director = false where coach_id = '5551234'");
+    await db.pool.query("delete from org_roles where coach_id = '5551234' and role = 'Director'");
     expect(await auth.getSessionUser(deps, t)).toMatchObject({ coachId: "5551234" });
     expect((await auth.getSessionUser(deps, t))?.actingBy).toBeUndefined();
-    await db.pool.query("update users set thunder_director = true where coach_id = '5551234'");
+    await grant(db.pool, "5551234 thunder Director");
 
     // The other person deactivated: back to yourself.
     await db.pool.query("update users set active = false where coach_id = '5550002'");
@@ -561,37 +585,3 @@ describe("sessions", () => {
   });
 });
 
-describe("MasterAuth sheet: PINs set at login are queued for the sheet, encrypted", () => {
-  const env = { ...process.env };
-  beforeAll(() => {
-    process.env.MASTERAUTH_SYNC = "on";
-    process.env.MASTERAUTH_SHEET = "test";
-    process.env.MASTERAUTH_PIN_KEY = Buffer.alloc(32, 7).toString("base64");
-  });
-  afterAll(() => {
-    process.env = env;
-  });
-  const queuedPin = async () => {
-    const { openPin } = await import("../masterauth/pin-box");
-    const r = await db.pool.query<{ pin_enc: string | null }>("select pin_enc from masterauth_outbox where coach_id = '5551234'");
-    return r.rows[0]?.pin_enc ? openPin(r.rows[0].pin_enc) : null;
-  };
-
-  it("Set Your PIN, Forgot PIN and Create Account each queue the new PIN", async () => {
-    await addUser({ pin: null });
-    await auth.lookupPhone(deps, CELL);
-    token(await auth.completeStarter(deps, CELL, mail.lastCode(), "2468", "2468"));
-    expect(await queuedPin()).toBe("2468");
-
-    await auth.startForgot(deps, CELL);
-    token(await auth.completeReset(deps, CELL, mail.lastCode(), "9753", "9753"));
-    expect(await queuedPin()).toBe("9753");
-
-    await db.reset();
-    await auth.startSignup(deps, { cell: CELL, firstName: "Earl", lastName: "Epps", email: "e@example.com", pin1: "1357", pin2: "1357" });
-    const payload = (await db.pool.query("select payload from email_codes")).rows[0].payload;
-    expect(JSON.stringify(payload)).not.toContain("1357"); // the PIN only travels encrypted
-    await auth.completeSignup(deps, CELL, mail.lastCode());
-    expect(await queuedPin()).toBe("1357");
-  });
-});
