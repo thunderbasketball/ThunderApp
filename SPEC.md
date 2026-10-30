@@ -184,7 +184,13 @@ Example: Team has Thu 6PM. Mon 6PM is within 72h → can add it (N=1). Once Mon 
 ## 7. MasterAuth sync (two-way)
 
 - Supabase is the app's working database; the MasterAuth Sheet stays in step with it.
-- **App → Sheet**: on any user change (create, PIN, email, Thunder roles, Active), write that user's row to the Sheet, matched by CoachID. Only Thunder-owned and shared columns are written. Scenic City columns are never written.
+- **App → Sheet** (built; `MASTERAUTH_SYNC=on` in `.env.local`, the sheet shared with the service account as **Editor**): a database trigger queues every change to a user (name, cell, email, VerifiedEmail, PIN, ThunderRequest/Coach/Director, new user, deleted user) in `masterauth_outbox`; every minute the server writes queued users to their row, matched by CoachID, only the cells that differ.
+  - Written: FirstName, LastName, EmailAddress, VerifiedEmail, ThunderRequest, ThunderCoach, ThunderDirector, and PIN. **Never** written: Active on an existing row (shared with Scenic City; deactivating in Thunder doesn't block Scenic City), the Scenic City columns, ThunderAdmin, TempAuthCode, CodeExpiration, DeviceID, LastLogin.
+  - **PIN**: the app only knows a PIN when someone sets it (Set Your PIN, Forgot PIN, Create Account). It's held encrypted (`MASTERAUTH_PIN_KEY`) until written, then deleted. After **Reset login** the sheet gets 1234. Otherwise the sheet's PIN is left alone. With the sync off, PINs aren't kept at all.
+  - **New user**: a new row with CoachID, names, Active = TRUE, PIN (or 1234), CellNumber, email and Thunder roles; other columns left empty.
+  - **Deleted user**: the row stays; ThunderRequest/Coach/Director set to FALSE.
+  - Values are written RAW (never run as formulas); text starting with `= + - @` is prefixed with `'`. Right before writing, the CoachIDs of the rows are read again; if rows moved, nothing is written and it tries again.
+  - A failure is retried (1, 2, 4… up to 60 minutes apart) and never blocks the app; the Users page shows a red note while it's failing.
 - **Sheet → App**: a scheduled job (every few minutes) reads the Sheet and applies changes made by Scenic City or by hand.
 - Conflict rule: see Open Question 2.
 - Writing to the Sheet guards against formula injection (any text starting with `= + - @` is prefixed with `'`).

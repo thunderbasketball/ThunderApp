@@ -5,5 +5,7 @@ export async function register() {
     startRegistrationSync();
     const { startNotifyEmails } = await import("./lib/notify/scheduler");
     startNotifyEmails();
+    const { startMasterAuthSync } = await import("./lib/masterauth/scheduler");
+    startMasterAuthSync();
   }
 }

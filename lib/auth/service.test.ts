@@ -560,3 +560,38 @@ describe("sessions", () => {
     expect(await auth.getSessionUser(deps, undefined)).toBeNull();
   });
 });
+
+describe("MasterAuth sheet: PINs set at login are queued for the sheet, encrypted", () => {
+  const env = { ...process.env };
+  beforeAll(() => {
+    process.env.MASTERAUTH_SYNC = "on";
+    process.env.MASTERAUTH_SHEET = "test";
+    process.env.MASTERAUTH_PIN_KEY = Buffer.alloc(32, 7).toString("base64");
+  });
+  afterAll(() => {
+    process.env = env;
+  });
+  const queuedPin = async () => {
+    const { openPin } = await import("../masterauth/pin-box");
+    const r = await db.pool.query<{ pin_enc: string | null }>("select pin_enc from masterauth_outbox where coach_id = '5551234'");
+    return r.rows[0]?.pin_enc ? openPin(r.rows[0].pin_enc) : null;
+  };
+
+  it("Set Your PIN, Forgot PIN and Create Account each queue the new PIN", async () => {
+    await addUser({ pin: null });
+    await auth.lookupPhone(deps, CELL);
+    token(await auth.completeStarter(deps, CELL, mail.lastCode(), "2468", "2468"));
+    expect(await queuedPin()).toBe("2468");
+
+    await auth.startForgot(deps, CELL);
+    token(await auth.completeReset(deps, CELL, mail.lastCode(), "9753", "9753"));
+    expect(await queuedPin()).toBe("9753");
+
+    await db.reset();
+    await auth.startSignup(deps, { cell: CELL, firstName: "Earl", lastName: "Epps", email: "e@example.com", pin1: "1357", pin2: "1357" });
+    const payload = (await db.pool.query("select payload from email_codes")).rows[0].payload;
+    expect(JSON.stringify(payload)).not.toContain("1357"); // the PIN only travels encrypted
+    await auth.completeSignup(deps, CELL, mail.lastCode());
+    expect(await queuedPin()).toBe("1357");
+  });
+});

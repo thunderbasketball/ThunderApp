@@ -1,6 +1,7 @@
 // Login rules (SPEC.md section 1). Every function re-checks everything on the server;
 // the browser only tells us which step the person is on.
 import type { Pool, PoolClient } from "pg";
+import { queuePin, sealPin } from "../masterauth/pin-box";
 import { withTx } from "../sql";
 import { coachIdFromCell, normalizeCell } from "../phone";
 import { STARTER_PIN, hashCode, hashPin, isStarterPin, newCode, newSessionToken, sha256, verifyPin } from "./crypto";
@@ -373,6 +374,7 @@ export async function completeStarter(deps: Deps, cellInput: unknown, code: unkn
       c.row.email,
       deps.now(),
     ]);
+    await queuePin(q, user.coach_id, sealPin(pin1 as string));
     await q.query("delete from pin_lockouts where cell = $1", [cell]);
     return startSession(deps, q, user.coach_id);
   });
@@ -479,6 +481,7 @@ export async function completeReset(deps: Deps, cellInput: unknown, code: unknow
     const c = await checkCode(deps, q, cell, "reset", code);
     if (!c.ok) return c.step;
     await q.query("update users set pin_hash = $2, updated_at = $3 where coach_id = $1", [user.coach_id, pinHash, deps.now()]);
+    await queuePin(q, user.coach_id, sealPin(pin1 as string));
     await q.query("delete from pin_lockouts where cell = $1", [cell]);
     return startSession(deps, q, user.coach_id);
   });
@@ -503,7 +506,9 @@ export async function startSignup(
     await lockCell(q, cell);
     const clash = await q.query("select 1 from users where cell = $1 or coach_id = $2", [cell, coachIdFromCell(cell)]);
     if (clash.rows.length) return err(MSG.taken);
-    const fail = await issueCode(deps, q, cell, "signup", email, { firstName, lastName, pinHash });
+    // The PIN itself only travels encrypted, for the MasterAuth sheet (null when that sync is off).
+    const pinSealed = sealPin(input.pin1 as string);
+    const fail = await issueCode(deps, q, cell, "signup", email, { firstName, lastName, pinHash, pinSealed });
     return fail ?? { step: "signupCode", maskedEmail: maskEmail(email) };
   });
 }
@@ -515,7 +520,12 @@ export async function completeSignup(deps: Deps, cellInput: unknown, code: unkno
     await lockCell(q, cell);
     const c = await checkCode(deps, q, cell, "signup", code);
     if (!c.ok) return c.step;
-    const { firstName, lastName, pinHash } = c.row.payload as { firstName: string; lastName: string; pinHash: string };
+    const { firstName, lastName, pinHash, pinSealed } = c.row.payload as {
+      firstName: string;
+      lastName: string;
+      pinHash: string;
+      pinSealed?: string | null;
+    };
     const now = deps.now();
     const ins = await q.query(
       `insert into users (coach_id, first_name, last_name, active, pin_hash, cell, email, verified_email,
@@ -525,6 +535,7 @@ export async function completeSignup(deps: Deps, cellInput: unknown, code: unkno
       [coachIdFromCell(cell), firstName, lastName, pinHash, cell, c.row.email, now],
     );
     if (!ins.rowCount) return err(MSG.taken);
+    await queuePin(q, coachIdFromCell(cell), pinSealed ?? null);
     if (deps.devStarterBypass) {
       // Testing mode: new accounts are approved Directors and logged straight in.
       await q.query("update users set thunder_director = true, thunder_request = false where cell = $1", [cell]);

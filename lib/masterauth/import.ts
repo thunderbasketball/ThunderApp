@@ -152,9 +152,22 @@ async function importOne(q: PoolClient, u: SheetUser, pinHash: string | null, no
                           scenic_city_request, scenic_city_coach, scenic_city_director, scenic_city_associations, created_at, updated_at)
        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $16)`,
       [
-        u.coachId, u.first, u.last, u.active, pinHash, u.cell, u.email, u.verifiedEmail,
-        u.thunderRequest && !u.thunderCoach && !u.thunderDirector, u.thunderCoach, u.thunderDirector,
-        u.scenicCityRequest, u.scenicCityCoach, u.scenicCityDirector, u.scenicCityAssociations, now,
+        u.coachId,
+        u.first,
+        u.last,
+        u.active,
+        pinHash,
+        u.cell,
+        u.email,
+        u.verifiedEmail,
+        u.thunderRequest && !u.thunderCoach && !u.thunderDirector,
+        u.thunderCoach,
+        u.thunderDirector,
+        u.scenicCityRequest,
+        u.scenicCityCoach,
+        u.scenicCityDirector,
+        u.scenicCityAssociations,
+        now,
       ],
     );
     return { coachId: u.coachId, name, status: "new", changes: [] };
@@ -176,7 +189,8 @@ async function importOne(q: PoolClient, u: SheetUser, pinHash: string | null, no
   const thunderRequest = (cur.thunder_request || u.thunderRequest) && !next.thunder_coach && !next.thunder_director;
 
   const changes: string[] = [];
-  if (next.first_name !== cur.first_name || next.last_name !== cur.last_name) changes.push(`name ${cur.first_name} ${cur.last_name} → ${name}`);
+  if (next.first_name !== cur.first_name || next.last_name !== cur.last_name)
+    changes.push(`name ${cur.first_name} ${cur.last_name} → ${name}`);
   if (next.active !== cur.active) changes.push(next.active ? "activated" : "deactivated");
   if (next.pin_hash !== cur.pin_hash) changes.push("PIN from sheet");
   if (next.email !== cur.email) changes.push(`email ${cur.email ?? "(none)"} → ${next.email ?? "(none)"}`);
@@ -191,9 +205,22 @@ async function importOne(q: PoolClient, u: SheetUser, pinHash: string | null, no
             updated_at = case when $15 then $16 else updated_at end
      where coach_id = $1`,
     [
-      u.coachId, next.first_name, next.last_name, next.active, next.pin_hash, next.email, next.verified_email,
-      thunderRequest, next.thunder_coach, next.thunder_director,
-      u.scenicCityRequest, u.scenicCityCoach, u.scenicCityDirector, u.scenicCityAssociations, changes.length > 0, now,
+      u.coachId,
+      next.first_name,
+      next.last_name,
+      next.active,
+      next.pin_hash,
+      next.email,
+      next.verified_email,
+      thunderRequest,
+      next.thunder_coach,
+      next.thunder_director,
+      u.scenicCityRequest,
+      u.scenicCityCoach,
+      u.scenicCityDirector,
+      u.scenicCityAssociations,
+      changes.length > 0,
+      now,
     ],
   );
   return { coachId: u.coachId, name, status: changes.length ? "updated" : "unchanged", changes };

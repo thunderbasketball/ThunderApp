@@ -4,15 +4,45 @@ import { createTestDb } from "../testing/db";
 import { importMasterAuth, parseMasterAuth } from "./import";
 
 const H = [
-  "CoachID", "FirstName", "LastName", "Active", "PIN", "CellNumber", "EmailAddress", "ThunderAdmin", "ThunderRequest",
-  "ScenicCityRequest", "ThunderCoach", "ScenicCityCoach", "ThunderDirector", "ScenicCityDirector", "ScenicCityAssociations",
-  "", "TempAuthCode", "VerifiedEmail",
+  "CoachID",
+  "FirstName",
+  "LastName",
+  "Active",
+  "PIN",
+  "CellNumber",
+  "EmailAddress",
+  "ThunderAdmin",
+  "ThunderRequest",
+  "ScenicCityRequest",
+  "ThunderCoach",
+  "ScenicCityCoach",
+  "ThunderDirector",
+  "ScenicCityDirector",
+  "ScenicCityAssociations",
+  "",
+  "TempAuthCode",
+  "VerifiedEmail",
 ];
 // CoachID, First, Last, Active, PIN, Cell, Email, Admin, TReq, SReq, TCoach, SCoach, TDir, SDir, SAssoc, -, Temp, Verified
 const u = (o: Partial<Record<string, string>> = {}) => [
-  o.id ?? "5551234", o.first ?? "Jeb", o.last ?? "Black", o.active ?? "TRUE", o.pin ?? "1988", o.cell ?? "4235551234",
-  o.email ?? "jeb@example.com", "", o.treq ?? "FALSE", "FALSE", o.coach ?? "TRUE", o.scoach ?? "FALSE", o.dir ?? "FALSE",
-  "FALSE", o.assoc ?? "FALSE", "", "", o.verified ?? "",
+  o.id ?? "5551234",
+  o.first ?? "Jeb",
+  o.last ?? "Black",
+  o.active ?? "TRUE",
+  o.pin ?? "1988",
+  o.cell ?? "4235551234",
+  o.email ?? "jeb@example.com",
+  "",
+  o.treq ?? "FALSE",
+  "FALSE",
+  o.coach ?? "TRUE",
+  o.scoach ?? "FALSE",
+  o.dir ?? "FALSE",
+  "FALSE",
+  o.assoc ?? "FALSE",
+  "",
+  "",
+  o.verified ?? "",
 ];
 const tab = (...rows: string[][]) => [H, ...rows];
 
@@ -21,8 +51,17 @@ describe("parseMasterAuth", () => {
     const r = parseMasterAuth(tab(u({ verified: "jeb@example.com", assoc: "TRUE" })));
     expect(r.errors).toEqual([]);
     expect(r.users[0]).toMatchObject({
-      coachId: "5551234", first: "Jeb", last: "Black", active: true, pin: "1988", cell: "4235551234",
-      email: "jeb@example.com", verifiedEmail: "jeb@example.com", thunderCoach: true, thunderDirector: false, scenicCityAssociations: "TRUE",
+      coachId: "5551234",
+      first: "Jeb",
+      last: "Black",
+      active: true,
+      pin: "1988",
+      cell: "4235551234",
+      email: "jeb@example.com",
+      verifiedEmail: "jeb@example.com",
+      thunderCoach: true,
+      thunderDirector: false,
+      scenicCityAssociations: "TRUE",
     });
   });
 
@@ -76,13 +115,21 @@ describe("importMasterAuth", () => {
     );
     const out = await importMasterAuth(db.pool, parseMasterAuth(tab(u())), { now, dryRun: false });
     expect(out[0]).toMatchObject({ status: "updated" });
-    expect(out[0].changes).toEqual(["name Jebediah Black → Jeb Black", "PIN from sheet", "email old@example.com → jeb@example.com", "+Coach"]);
+    expect(out[0].changes).toEqual([
+      "name Jebediah Black → Jeb Black",
+      "PIN from sheet",
+      "email old@example.com → jeb@example.com",
+      "+Coach",
+    ]);
     expect(await user("5551234")).toMatchObject({ first_name: "Jeb", thunder_director: true, thunder_coach: true });
   });
 
   it("keeps a PIN the person chose in the app when the sheet still has 1234", async () => {
     const mine = await hashPin("4321");
-    await db.pool.query("insert into users (coach_id, first_name, last_name, cell, pin_hash) values ('5551234', 'Jeb', 'Black', '4235551234', $1)", [mine]);
+    await db.pool.query(
+      "insert into users (coach_id, first_name, last_name, cell, pin_hash) values ('5551234', 'Jeb', 'Black', '4235551234', $1)",
+      [mine],
+    );
     await importMasterAuth(db.pool, parseMasterAuth(tab(u({ pin: "1234" }))), { now, dryRun: false });
     expect((await user("5551234")).pin_hash).toBe(mine);
   });
@@ -105,6 +152,8 @@ describe("importMasterAuth", () => {
 
   it("refuses a cell already used by a different CoachID", async () => {
     await db.pool.query("insert into users (coach_id, first_name, last_name, cell) values ('7777777', 'Some', 'One', '4235551234')");
-    await expect(importMasterAuth(db.pool, parseMasterAuth(tab(u())), { now, dryRun: false })).rejects.toThrow(/already used by CoachID 7777777/);
+    await expect(importMasterAuth(db.pool, parseMasterAuth(tab(u())), { now, dryRun: false })).rejects.toThrow(
+      /already used by CoachID 7777777/,
+    );
   });
 });
