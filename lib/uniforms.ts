@@ -7,7 +7,7 @@ import { canSeeRoster } from "./rosters";
 import { withTx } from "./sql";
 import { SIZES, type UniformRow } from "./uniform-fields";
 
-export { SIZES, duplicateNumbers, isMissing, type UniformRow } from "./uniform-fields";
+export { SIZES, duplicateNumbers, isMissing, jerseyName, type UniformRow } from "./uniform-fields";
 
 type Deps = { pool: Pool; now: () => Date };
 type Result<T = object> = ({ ok: true } & T) | { ok: false; message: string };
@@ -92,4 +92,20 @@ export async function saveUniform(
     );
     return { ok: true as const, updatedBy: by, updatedAt: at, duplicates: d.rows.map((x) => x.number) };
   });
+}
+
+export type UniformOrder = { teamId: string; team: string; registrantId: string; lastName: string; number: string | null; size: string | null };
+
+// Director only: every rostered player whose family ordered a uniform, by team (same order as the Teams page), then last name.
+export async function listUniformOrders(deps: Deps, viewer: SessionUser): Promise<UniformOrder[]> {
+  if (!viewer.isDirector) throw new Error("Director only");
+  const r = await deps.pool.query<UniformOrder>(
+    `select t.id::text as "teamId", t.name as team, p.registrant_id as "registrantId", p.last_name as "lastName", u.number, u.size
+     from team_players p
+     join teams t on t.id = p.team_id
+     join registrations g on g.registrant_id = p.registrant_id and g.uniform_needed
+     left join team_uniforms u on u.team_id = p.team_id and u.registrant_id = p.registrant_id
+     order by t.level = 'COMP' desc, t.gender, t.grade_sort, lower(t.name), lower(p.last_name), lower(p.first_name)`,
+  );
+  return r.rows;
 }

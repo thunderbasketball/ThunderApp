@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { SessionUser } from "./auth/service";
 import { addPlayers } from "./rosters";
 import { createTestDb } from "./testing/db";
-import { duplicateNumbers, isMissing, listUniforms, saveUniform, uniformsMissing } from "./uniforms";
+import { duplicateNumbers, isMissing, listUniformOrders, listUniforms, saveUniform, uniformsMissing } from "./uniforms";
 
 const person = (coachId: string, firstName: string, isDirector = false): SessionUser => ({
   coachId,
@@ -88,10 +88,20 @@ describe("uniforms", () => {
     expect(duplicateNumbers((await listUniforms(deps(), parent, team))!)).toEqual(new Set()); // 0 and 00 differ
   });
 
+  it("Directors see every uniform ordered, with its number and size", async () => {
+    await saveUniform(deps(), parent, team, "r1", { number: "9", size: "AXS" });
+    expect((await listUniformOrders(deps(), director)).map((r) => [r.team, r.lastName, r.number, r.size])).toEqual([
+      ["4G A", "Xu", null, null],
+      ["4G A", "Zed", "9", "AXS"],
+    ]); // Bea didn't order one
+    await expect(listUniformOrders(deps(), parent)).rejects.toThrow();
+  });
+
   it("checks every value and who's asking", async () => {
     expect(await saveUniform(deps(), parent, team, "r1", { number: "100" })).toMatchObject({ ok: false });
     expect(await saveUniform(deps(), parent, team, "r1", { number: "=1+1" })).toMatchObject({ ok: false });
     expect(await saveUniform(deps(), parent, team, "r1", { size: "Huge" })).toMatchObject({ ok: false });
+    expect(await saveUniform(deps(), parent, team, "r1", { size: "A2XL" })).toMatchObject({ ok: false });
     expect(await saveUniform(deps(), parent, team, "nobody", { number: "1" })).toMatchObject({ ok: false });
     expect(await saveUniform(deps(), stranger, team, "r1", { number: "1" })).toMatchObject({ ok: false });
     expect(await saveUniform(deps(), parent, team, "r1", {})).toMatchObject({ ok: false });

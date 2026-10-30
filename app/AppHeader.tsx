@@ -17,7 +17,7 @@ import NotifyButton from "./NotifyButton";
 import { LogoutButton } from "./HomeActions";
 import { Avatar } from "./ui";
 
-type Tab = "teams" | "practice" | "events" | "users" | "players" | "coaches";
+type Tab = "teams" | "practice" | "events" | "users" | "players" | "coaches" | "uniforms";
 export type TeamTab = "staff" | "roster" | "uniforms" | "practices";
 
 // Events the person runs check-in for (from yesterday on), plus their teams' practices today.
@@ -69,6 +69,7 @@ export default async function AppHeader({
     { key: "users", href: "/users", label: "Users", icon: ICONS.users },
     { key: "players", href: "/players", label: "Players", icon: ICONS.players },
     { key: "coaches", href: "/coaches", label: "Coaches", icon: ICONS.coaches },
+    { key: "uniforms", href: "/uniforms", label: "Uniforms", icon: ICONS.uniforms },
   ];
   const tabs = teamTab
     ? [
@@ -208,7 +209,7 @@ export default async function AppHeader({
           aria-label={teamTab ? "Team" : "Director"}
           className="fixed inset-x-0 bottom-0 z-20 border-t border-zinc-950/10 bg-white/95 backdrop-blur-xl sm:hidden dark:border-white/10 dark:bg-zinc-950/95"
         >
-          <div className={`grid ${tabs.length === 4 ? "grid-cols-4" : "grid-cols-6"}`}>
+          <div className={`grid ${tabs.length === 4 ? "grid-cols-4" : "grid-cols-7"}`}>
             {tabs.map((t) => {
               const on = activeTab === t.key;
               return (
